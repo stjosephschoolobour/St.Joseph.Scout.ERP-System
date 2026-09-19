@@ -1,0 +1,6 @@
+{
+  "name": "نظام إدارة الكشافة - مدرسة القديس يوسف بالعبور",
+  "description": "برنامج محلي آمن لإدارة بيانات عضوات وقادة الكشافة وقاعدة بيانات SQLite بدون إنترنت",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

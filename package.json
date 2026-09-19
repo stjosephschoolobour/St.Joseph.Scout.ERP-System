@@ -1,0 +1,79 @@
+{
+  "name": "scout-management-system",
+  "productName": "ScoutSystem",
+  "description": "نظام إدارة الكشافة - مدرسة القديس يوسف بالعبور",
+  "author": "St. Joseph Scout",
+  "version": "1.0.0",
+  "main": "electron-main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/server.cjs --external:electron --external:vite && node -e \"const fs=require('fs'); try{fs.copyFileSync('node_modules/sql.js/dist/sql-wasm.wasm', 'dist/sql-wasm.wasm');}catch(e){}\"",
+    "start": "node dist/server.cjs",
+    "lint": "tsc --noEmit",
+    "dist:win": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.stjoseph.scoutsystem",
+    "productName": "ScoutSystem",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-main.cjs",
+      "package.json",
+      "data/**/*",
+      "scout.db"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "نظام إدارة الكشافة"
+    }
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-react": "^5.0.4",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "html-to-image": "^1.11.13",
+    "html2canvas-pro": "^2.4.3",
+    "jszip": "^3.10.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "multer": "^2.3.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "sql.js": "^1.14.2",
+    "vite": "^6.2.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^22.14.0",
+    "@types/sql.js": "^1.4.11",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3",
+    "electron": "^33.2.1",
+    "electron-builder": "^26.15.3"
+  }
+}

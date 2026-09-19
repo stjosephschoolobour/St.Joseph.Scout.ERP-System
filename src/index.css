@@ -1,0 +1,333 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, :where(.dark *)));
+@custom-variant dark (&:where(.dark, :where(.dark *)));
+
+/* ============================================================
+   GLOBAL NIGHT MODE ROOT ENGINE
+   Covers every page, window, modal, popup, card, table, dropdown,
+   and input across the entire Scout Management System.
+   ============================================================ */
+
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark,
+html.dark body {
+  background-color: #090e1a !important;
+  color: #f1f5f9 !important;
+}
+
+/* ------------------------------------------------------------
+   1. Universal Background Overrides (eliminates any white page/box)
+   ------------------------------------------------------------ */
+
+/* Primary white cards, drawers, popups, and modal surfaces */
+html.dark .bg-white,
+html.dark [class*="bg-white"] {
+  background-color: #0f172a !important;
+}
+
+/* Off-white and light background layers */
+html.dark .bg-slate-50,
+html.dark [class*="bg-slate-50"],
+html.dark .bg-gray-50,
+html.dark [class*="bg-gray-50"] {
+  background-color: #162032 !important;
+}
+
+html.dark .bg-slate-100,
+html.dark [class*="bg-slate-100"],
+html.dark .bg-gray-100,
+html.dark [class*="bg-gray-100"] {
+  background-color: #0b1324 !important;
+}
+
+html.dark .bg-slate-200,
+html.dark [class*="bg-slate-200"],
+html.dark .bg-gray-200,
+html.dark [class*="bg-gray-200"] {
+  background-color: #1e293b !important;
+}
+
+/* Input focus background overrides */
+html.dark [class*="focus:bg-white"]:focus,
+html.dark [class*="focus:bg-slate-50"]:focus {
+  background-color: #0f172a !important;
+}
+
+/* ------------------------------------------------------------
+   2. Modals, Dialogs, Floating Drawers, Popups & Tooltips
+   ------------------------------------------------------------ */
+
+/* Fixed modal backdrop scrim */
+html.dark [class*="fixed"][class*="inset-0"] {
+  background-color: rgba(3, 7, 18, 0.78) !important;
+}
+
+/* Modal dialog container card */
+html.dark [class*="fixed"][class*="inset-0"] [class*="max-w-"],
+html.dark [role="dialog"],
+html.dark .modal-card,
+html.dark .dialog-card {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+  color: #f8fafc !important;
+}
+
+/* Modal header/footer bar sections */
+html.dark [class*="fixed"][class*="inset-0"] [class*="max-w-"] .border-b,
+html.dark [class*="fixed"][class*="inset-0"] [class*="max-w-"] .border-t {
+  border-color: #1e293b !important;
+}
+
+/* Floating dropdowns, action menus, and poppers */
+html.dark [role="menu"],
+html.dark [role="listbox"],
+html.dark .dropdown-menu {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* ------------------------------------------------------------
+   3. Borders & Dividers
+   ------------------------------------------------------------ */
+
+html.dark .border-slate-100,
+html.dark [class*="border-slate-100"],
+html.dark .border-slate-200,
+html.dark [class*="border-slate-200"],
+html.dark .border-gray-100,
+html.dark .border-gray-200 {
+  border-color: #1e293b !important;
+}
+
+html.dark .border-slate-300,
+html.dark [class*="border-slate-300"],
+html.dark .border-gray-300 {
+  border-color: #334155 !important;
+}
+
+html.dark .divide-slate-100 > * + *,
+html.dark .divide-slate-200 > * + *,
+html.dark [class*="divide-slate-100"] > * + *,
+html.dark [class*="divide-slate-200"] > * + * {
+  border-color: #1e293b !important;
+}
+
+/* ------------------------------------------------------------
+   4. Typography Contrast & Readability
+   ------------------------------------------------------------ */
+
+html.dark .text-slate-900,
+html.dark [class*="text-slate-900"],
+html.dark .text-slate-800,
+html.dark [class*="text-slate-800"],
+html.dark .text-gray-900,
+html.dark .text-gray-800 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-slate-700,
+html.dark [class*="text-slate-700"],
+html.dark .text-slate-600,
+html.dark [class*="text-slate-600"],
+html.dark .text-gray-700,
+html.dark .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-500,
+html.dark [class*="text-slate-500"],
+html.dark .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+html.dark .text-slate-400,
+html.dark [class*="text-slate-400"],
+html.dark .text-gray-400 {
+  color: #64748b !important;
+}
+
+/* ------------------------------------------------------------
+   5. Form Controls: Inputs, Selects, and Textareas
+   ------------------------------------------------------------ */
+
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="color"]),
+html.dark select,
+html.dark textarea {
+  background-color: #162032 !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="color"]):focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #10b981 !important;
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 1px #10b981 !important;
+  outline: none !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+html.dark select option,
+html.dark optgroup {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+/* Secondary & Action Buttons */
+html.dark button.bg-white,
+html.dark button[class*="bg-white"],
+html.dark button.bg-slate-100,
+html.dark button[class*="bg-slate-100"],
+html.dark button.bg-slate-50,
+html.dark button[class*="bg-slate-50"] {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark button.bg-white:hover,
+html.dark button[class*="bg-white"]:hover,
+html.dark button.bg-slate-100:hover,
+html.dark button[class*="bg-slate-100"]:hover,
+html.dark button.bg-slate-50:hover,
+html.dark button[class*="bg-slate-50"]:hover,
+html.dark [class*="hover:bg-slate-100"]:hover,
+html.dark [class*="hover:bg-slate-50"]:hover {
+  background-color: #273549 !important;
+  color: #ffffff !important;
+}
+
+/* ------------------------------------------------------------
+   6. Data Tables in Dark Mode
+   ------------------------------------------------------------ */
+
+html.dark table thead,
+html.dark table thead tr,
+html.dark table thead th {
+  background-color: #162032 !important;
+  color: #cbd5e1 !important;
+  border-color: #1e293b !important;
+}
+
+html.dark table tbody tr {
+  border-color: #1e293b !important;
+  background-color: transparent;
+}
+
+html.dark table tbody tr:hover {
+  background-color: #162032 !important;
+}
+
+html.dark table tbody td {
+  border-color: #1e293b !important;
+}
+
+/* ------------------------------------------------------------
+   7. Badges, Pills & Color Chips in Dark Mode
+   ------------------------------------------------------------ */
+
+html.dark .bg-emerald-50,
+html.dark [class*="bg-emerald-50"],
+html.dark .bg-emerald-100,
+html.dark [class*="bg-emerald-100"] {
+  background-color: rgba(6, 78, 59, 0.45) !important;
+  color: #6ee7b7 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+html.dark .bg-amber-50,
+html.dark [class*="bg-amber-50"],
+html.dark .bg-amber-100,
+html.dark [class*="bg-amber-100"] {
+  background-color: rgba(120, 53, 15, 0.45) !important;
+  color: #fcd34d !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+html.dark .bg-blue-50,
+html.dark [class*="bg-blue-50"],
+html.dark .bg-blue-100,
+html.dark [class*="bg-blue-100"] {
+  background-color: rgba(30, 58, 138, 0.45) !important;
+  color: #93c5fd !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+html.dark .bg-red-50,
+html.dark [class*="bg-red-50"],
+html.dark .bg-rose-50,
+html.dark [class*="bg-rose-50"],
+html.dark .bg-red-100,
+html.dark [class*="bg-red-100"],
+html.dark .bg-rose-100,
+html.dark [class*="bg-rose-100"] {
+  background-color: rgba(136, 19, 55, 0.45) !important;
+  color: #fda4af !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+html.dark .bg-purple-50,
+html.dark [class*="bg-purple-50"],
+html.dark .bg-purple-100,
+html.dark [class*="bg-purple-100"] {
+  background-color: rgba(88, 28, 135, 0.45) !important;
+  color: #d8b4fe !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+/* ------------------------------------------------------------
+   8. Scrollbars in Dark Mode
+   ------------------------------------------------------------ */
+
+html.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #090e1a;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* ------------------------------------------------------------
+   9. Print Safeguard (Paper stays pure white with crisp black text)
+   ------------------------------------------------------------ */
+
+@media print {
+  html.dark,
+  html.dark body,
+  html.dark #scout_member_card,
+  html.dark #scout_receipt_card,
+  html.dark [class*="bg-white"],
+  html.dark [class*="bg-slate-"],
+  html.dark [class*="bg-gray-"] {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  html.dark [class*="text-slate-"],
+  html.dark [class*="text-gray-"] {
+    color: #000000 !important;
+  }
+}
