@@ -33,9 +33,33 @@ import { TopHeader } from './components/TopHeader';
 
 export type { ViewMode };
 
+const getInitialView = (): ViewMode => {
+  try {
+    const saved = localStorage.getItem('scout_active_view') as ViewMode;
+    const validViews: ViewMode[] = [
+      'dashboard',
+      'members',
+      'tribes',
+      'activities',
+      'badges',
+      'wallets',
+      'subscriptions',
+      'store',
+      'reports',
+      'backup',
+      'settings',
+      'audit',
+    ];
+    if (saved && validViews.includes(saved)) {
+      return saved;
+    }
+  } catch {}
+  return 'dashboard';
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
+  const [currentView, setCurrentView] = useState<ViewMode>(getInitialView);
   const [isInitializing, setIsInitializing] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
@@ -149,9 +173,23 @@ export default function App() {
     }
   }, [currentUser, currentView, searchTerm, selectedStage, selectedType, loadData]);
 
+  // Synchronize currentView changes to localStorage
+  useEffect(() => {
+    if (currentUser) {
+      try {
+        localStorage.setItem('scout_active_view', currentView);
+      } catch {}
+    }
+  }, [currentView, currentUser]);
+
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    setCurrentView('dashboard');
+    const saved = localStorage.getItem('scout_active_view') as ViewMode | null;
+    if (saved) {
+      setCurrentView(saved);
+    } else {
+      setCurrentView('dashboard');
+    }
     showToast(`مرحباً بك، ${user.username} في نظام إدارة الكشافة`);
   };
 
@@ -159,6 +197,9 @@ export default function App() {
     await authService.logout();
     setCurrentUser(null);
     setCurrentView('dashboard');
+    try {
+      localStorage.removeItem('scout_active_view');
+    } catch {}
     showToast('تم تسجيل الخروج بنجاح');
   };
 

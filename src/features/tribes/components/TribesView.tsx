@@ -682,7 +682,7 @@ export const TribesView: React.FC<TribesViewProps> = ({
                         return (
                           <tr key={m.id} className="hover:bg-slate-50/70 transition">
                             <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
-                              {m.member_code || `sc${String(m.id).padStart(6, '0')}`}
+                              {m.member_code || `A25${String(m.id).padStart(4, '0')}`}
                             </td>
                             <td className="py-2.5 px-3 font-bold text-slate-900">{m.student_name}</td>
                             <td className="py-2.5 px-3 text-slate-600">{m.school_stage}</td>

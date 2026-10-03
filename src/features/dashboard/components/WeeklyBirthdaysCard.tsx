@@ -252,7 +252,7 @@ export const WeeklyBirthdaysCard: React.FC<WeeklyBirthdaysCardProps> = ({
                       {scout.student_name}
                     </h4>
                     <p className="text-[11px] font-mono text-emerald-700 font-bold mt-0.5">
-                      {scout.member_code || `sc${String(scout.id).padStart(6, '0')}`}
+                      {scout.member_code || `A25${String(scout.id).padStart(4, '0')}`}
                     </p>
                     <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-medium">
                       <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-semibold">

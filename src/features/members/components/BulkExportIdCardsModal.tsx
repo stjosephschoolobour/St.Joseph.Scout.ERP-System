@@ -182,14 +182,14 @@ export const BulkExportIdCardsModal: React.FC<BulkExportIdCardsModalProps> = ({
         exportedCards.push({
           member_id: m.id,
           student_name: m.student_name,
-          member_code: m.member_code || `sc${String(m.id).padStart(6, '0')}`,
+          member_code: m.member_code || `A25${String(m.id).padStart(4, '0')}`,
           front_base64: frontBase64,
           back_base64: backBase64 || undefined,
         });
 
         // Add to ZIP archive
         const cleanName = (m.student_name || 'عضو').replace(/[/\\?%*:|"<>]/g, '_').trim();
-        const cleanCode = (m.member_code || `sc${String(m.id).padStart(6, '0')}`).replace(/[/\\?%*:|"<>]/g, '_').trim();
+        const cleanCode = (m.member_code || `A25${String(m.id).padStart(4, '0')}`).replace(/[/\\?%*:|"<>]/g, '_').trim();
 
         if (frontBase64 && folder) {
           const frontRaw = frontBase64.replace(/^data:image\/\w+;base64,/, '');
@@ -244,7 +244,7 @@ export const BulkExportIdCardsModal: React.FC<BulkExportIdCardsModalProps> = ({
   const curCondition = activeMember?.medical_condition || '';
   const curBlood = BLOOD_TYPES.find((b) => curCondition.toUpperCase().includes(b.split(' ')[0])) || 'O+ POS';
   const curYear = new Date().getFullYear();
-  const curFormattedCode = activeMember?.member_code || (activeMember ? `SC-${curYear}-${String(activeMember.id).padStart(4, '0')}` : '');
+  const curFormattedCode = activeMember?.member_code || (activeMember ? `A25${String(activeMember.id).padStart(4, '0')}` : '');
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">

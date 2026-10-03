@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { walletService } from '../services/walletService';
 import { WalletTransaction } from '../types';
+import { getPhotoUrl } from '../../../utils/photo';
 
 interface WalletHistoryModalProps {
   isOpen: boolean;
@@ -140,8 +141,9 @@ export const WalletHistoryModal: React.FC<WalletHistoryModalProps> = ({
               <div className="flex items-center gap-3">
                 {data.member.photo_path ? (
                   <img
-                    src={data.member.photo_path}
+                    src={getPhotoUrl(data.member.photo_path)}
                     alt={data.member.student_name}
+                    referrerPolicy="no-referrer"
                     className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
                   />
                 ) : (

@@ -79,7 +79,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ data, loading }) => {
 
     const rows = data.allMembers.map((m, idx) => [
       idx + 1,
-      `"${m.member_code || `sc${String(m.id).padStart(6, '0')}`}"`,
+      `"${m.member_code || `A25${String(m.id).padStart(4, '0')}`}"`,
       `"${m.student_name.replace(/"/g, '""')}"`,
       `"${(m.student_name_en || '').replace(/"/g, '""')}"`,
       `"${(m.father_job || '').replace(/"/g, '""')}"`,

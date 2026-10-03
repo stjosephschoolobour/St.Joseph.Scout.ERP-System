@@ -312,7 +312,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {stats.recentMembers.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-50/70 transition">
-                    <td className="py-3 px-4 font-mono font-bold text-emerald-700">{m.member_code || `sc${String(m.id).padStart(6, '0')}`}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-emerald-700">{m.member_code || `A25${String(m.id).padStart(4, '0')}`}</td>
                     <td className="py-3 px-4 font-bold text-slate-900">{m.student_name}</td>
                     <td className="py-3 px-4 font-mono text-slate-600">{m.national_id}</td>
                     <td className="py-3 px-4 text-slate-700">{m.school_stage}</td>

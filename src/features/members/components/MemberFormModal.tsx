@@ -14,6 +14,7 @@ import {
   Upload,
   Info,
   Mail,
+  Crop,
 } from 'lucide-react';
 import { Member, MemberFormData, SchoolStage } from '../types';
 import { Tribe } from '../../tribes/types';
@@ -21,6 +22,7 @@ import { membersService } from '../services/membersService';
 import { tribesService } from '../../tribes/services/tribesService';
 import { validateMemberForm, calculateAge } from '../../../utils/validators';
 import { getPhotoUrl } from '../../../utils/photo';
+import { ImageEditorModal } from '../../../components/ImageEditorModal';
 
 export interface MemberFormModalProps {
   memberToEdit?: Member | null;
@@ -75,6 +77,7 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
   // Photo handling
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditing = !!memberToEdit;
@@ -163,9 +166,16 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
     setPhotoFile(file);
     const reader = new FileReader();
     reader.onload = () => {
-      setPhotoPreview(reader.result as string);
+      const resultUrl = reader.result as string;
+      setPhotoPreview(resultUrl);
+      setIsImageEditorOpen(true);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleSaveEditedPhoto = (editedFile: File, previewUrl: string) => {
+    setPhotoFile(editedFile);
+    setPhotoPreview(previewUrl);
   };
 
   const handleRemovePhoto = () => {
@@ -271,12 +281,12 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-        <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6 animate-scale-in">
-          {/* Header */}
-          <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+      <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+        <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-auto animate-scale-in flex flex-col max-h-[92vh]">
+          {/* Header (Sticky at top of modal) */}
+          <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 shrink-0 sticky top-0 z-10">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center border border-emerald-400/30 text-white">
+              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center border border-emerald-400/30 text-white shrink-0">
                 {isEditing ? <Award className="w-5 h-5" /> : <User className="w-5 h-5" />}
               </div>
               <div>
@@ -289,23 +299,24 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
             <button
               onClick={onClose}
               className="p-1.5 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white cursor-pointer"
+              title="إغلاق"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Member Code Status Bar */}
-          <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex items-center justify-between text-xs">
+          <div className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 px-6 py-2.5 flex items-center justify-between text-xs shrink-0">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-700">كود العضوية (Member Code):</span>
+              <span className="font-bold text-slate-700 dark:text-slate-300">كود العضوية (Member Code):</span>
               {isEditing && memberToEdit?.member_code ? (
-                <span className="font-mono font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded border border-emerald-300">
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-700">
                   {memberToEdit.member_code}
                 </span>
               ) : (
-                <span className="text-slate-500 flex items-center gap-1">
-                  <Info className="w-3.5 h-3.5 text-blue-500" />
-                  يتم إنشاؤه تلقائياً وبشكل دائم فريد (مثل: sc000150)
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  يتم إنشاؤه تلقائياً وبشكل دائم فريد (مثل: A250001)
                 </span>
               )}
             </div>
@@ -313,14 +324,15 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
 
           {/* Server Error Message */}
           {serverError && (
-            <div className="mx-6 mt-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-center gap-3 text-xs">
+            <div className="mx-6 mt-4 p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 flex items-center gap-3 text-xs shrink-0">
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
               <span>{serverError}</span>
             </div>
           )}
 
-          {/* Form Body */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-5 text-xs">
+          {/* Form Body - Scrollable content area */}
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+            <div className="p-6 space-y-5 text-xs overflow-y-auto flex-1">
             {/* Top Row: Photo Upload + Basic Info */}
             <div className="flex flex-col sm:flex-row items-center gap-5 p-4 bg-slate-50/80 rounded-2xl border border-slate-200">
               {/* Photo Box */}
@@ -358,14 +370,26 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
                   </button>
 
                   {photoPreview && (
-                    <button
-                      type="button"
-                      onClick={handleRemovePhoto}
-                      className="p-1 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-300 rounded-lg transition cursor-pointer"
-                      title="حذف الصورة"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsImageEditorOpen(true)}
+                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                        title="تعديل وقص وتدوير الصورة"
+                      >
+                        <Crop className="w-3 h-3 text-emerald-600" />
+                        <span>تعديل/قص</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        className="p-1 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-300 rounded-lg transition cursor-pointer"
+                        title="حذف الصورة"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -846,43 +870,44 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
                 </>
               )}
             </div>
+          </div>
 
-            {/* Action Buttons: حفظ, مسح, إلغاء */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn_submit_member"
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl shadow-xs transition disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  {loading ? 'جاري الحفظ...' : 'حفظ'}
-                </button>
-
-                <button
-                  id="btn_clear_member_form"
-                  type="button"
-                  onClick={handleClear}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition flex items-center gap-2 cursor-pointer border border-slate-200"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  مسح
-                </button>
-              </div>
+          {/* Action Buttons: حفظ, مسح, إلغاء (Sticky at bottom of modal) */}
+          <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <button
+                id="btn_submit_member"
+                type="submit"
+                disabled={loading}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl shadow-xs transition disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {loading ? 'جاري الحفظ...' : 'حفظ'}
+              </button>
 
               <button
-                id="btn_cancel_member_form"
+                id="btn_clear_member_form"
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition cursor-pointer border border-slate-200"
+                onClick={handleClear}
+                className="px-4 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-xl transition flex items-center gap-2 cursor-pointer border border-slate-200 dark:border-slate-600"
               >
-                إلغاء
+                <Trash2 className="w-4 h-4" />
+                مسح
               </button>
             </div>
-          </form>
-        </div>
+
+            <button
+              id="btn_cancel_member_form"
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-xl transition cursor-pointer border border-slate-200 dark:border-slate-600"
+            >
+              إلغاء
+            </button>
+          </div>
+        </form>
       </div>
+    </div>
 
       {/* Mini Quick Tribe Modal (Does not clear member form) */}
       {isQuickTribeOpen && (
@@ -951,6 +976,17 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Image Editor Modal (Crop, Rotate, Zoom) */}
+      {isImageEditorOpen && photoPreview && (
+        <ImageEditorModal
+          isOpen={isImageEditorOpen}
+          imageSrc={photoPreview}
+          title={isEditing ? `تعديل صورة: ${formData.student_name || 'العضو'}` : 'تعديل وقص صورة العضو'}
+          onClose={() => setIsImageEditorOpen(false)}
+          onSave={handleSaveEditedPhoto}
+        />
       )}
     </>
   );

@@ -171,11 +171,9 @@ export const ScoutIdCardModal: React.FC<ScoutIdCardModalProps> = ({
 
   if (!isOpen || !member) return null;
 
-  // Format code e.g. SCT-2024-8842
+  // Member code (e.g. A250151)
   const formattedCode =
-    member.member_code && member.member_code.toUpperCase().startsWith('SCT')
-      ? member.member_code.toUpperCase()
-      : `SCT-2024-${String(member.id).padStart(4, '0')}`;
+    member.member_code || `A25${String(member.id).padStart(4, '0')}`;
 
   const safeMemberName = (member.student_name || 'scout').trim().replace(/[\s/\\?%*:|"<>]+/g, '_');
 

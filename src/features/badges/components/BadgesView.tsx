@@ -675,7 +675,7 @@ export const BadgesView: React.FC<BadgesViewProps> = ({ currentUser, onSelectMem
                         </div>
                       </div>
                       <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                        {m.member_code || `sc${String(m.id).padStart(6, '0')}`}
+                        {m.member_code || `A25${String(m.id).padStart(4, '0')}`}
                       </span>
                     </button>
                   ))}

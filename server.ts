@@ -4,6 +4,7 @@ import https from 'https';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import bcrypt from 'bcryptjs';
@@ -94,40 +95,195 @@ const SCHOOL_GRADES_LIST = [
 ] as const;
 
 function normalizeGrade(raw: any): string {
-  if (!raw || typeof raw !== 'string') return 'الصف الأول الابتدائي';
-  const str = raw.trim();
+  if (raw === undefined || raw === null) return 'الصف الأول الابتدائي';
+  const str = String(raw).trim().replace(/\s+/g, ' ');
+  if (!str) return 'الصف الأول الابتدائي';
 
+  // 1. Direct match with SCHOOL_GRADES_LIST
   if (SCHOOL_GRADES_LIST.includes(str as any)) return str;
 
-  // Secondary
-  if (str.includes('ثانو')) {
-    if (str.includes('ثالث') || str.includes('3') || str.includes('٣')) return 'الصف الثالث الثانوي';
-    if (str.includes('ثان') || str.includes('2') || str.includes('٢')) return 'الصف الثاني الثانوي';
+  // Clean and normalize arabic characters for fuzzy matching
+  const normalized = str
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .toLowerCase();
+
+  // Arabic numbers to English numbers
+  const digits = normalized
+    .replace(/٠/g, '0')
+    .replace(/١/g, '1')
+    .replace(/٢/g, '2')
+    .replace(/٣/g, '3')
+    .replace(/٤/g, '4')
+    .replace(/٥/g, '5')
+    .replace(/٦/g, '6')
+    .replace(/٧/g, '7')
+    .replace(/٨/g, '8')
+    .replace(/٩/g, '9');
+
+  // Secondary School (ثانوي / ثانوى / ث / sec)
+  if (
+    normalized.includes('ثانو') ||
+    normalized.includes('ثانوى') ||
+    digits.includes('sec') ||
+    /(?:^|[^\w\u0600-\u06FF])[1-3]\s*ث(?:[^\w\u0600-\u06FF]|$)/.test(digits) ||
+    /(?:^|[^\w\u0600-\u06FF])ث\s*[1-3](?:[^\w\u0600-\u06FF]|$)/.test(digits)
+  ) {
+    if (
+      normalized.includes('تالت') ||
+      normalized.includes('ثالث') ||
+      digits.includes('3') ||
+      digits.includes('ثالثه') ||
+      digits.includes('تالثه')
+    ) {
+      return 'الصف الثالث الثانوي';
+    }
+    // Careful: avoid matching 'ثانوي' as 'ثاني'
+    if (
+      /(?:^|\s)(?:ثاني|ثانية|تاني|تانية|2)(?:\s|$)/.test(normalized) ||
+      /(?:الصف|سنة)\s*(?:الثاني|الثانية|التاني|التانية)/.test(normalized) ||
+      digits.includes('2')
+    ) {
+      return 'الصف الثاني الثانوي';
+    }
+    if (normalized.includes('اول') || digits.includes('1') || normalized.includes('اولي')) {
+      return 'الصف الأول الثانوي';
+    }
     return 'الصف الأول الثانوي';
   }
 
-  // Prep / Middle
-  if (str.includes('إعداد') || str.includes('اعداد')) {
-    if (str.includes('ثالث') || str.includes('3') || str.includes('٣')) return 'الصف الثالث الإعدادي';
-    if (str.includes('ثان') || str.includes('2') || str.includes('٢')) return 'الصف الثاني الإعدادي';
+  // Preparatory / Middle School (إعدادي / اعدادى / ع / prep)
+  if (
+    normalized.includes('اعداد') ||
+    digits.includes('prep') ||
+    /(?:^|[^\w\u0600-\u06FF])[1-3]\s*ع(?:[^\w\u0600-\u06FF]|$)/.test(digits) ||
+    /(?:^|[^\w\u0600-\u06FF])ع\s*[1-3](?:[^\w\u0600-\u06FF]|$)/.test(digits)
+  ) {
+    if (
+      normalized.includes('تالت') ||
+      normalized.includes('ثالث') ||
+      digits.includes('3') ||
+      digits.includes('ثالثه') ||
+      digits.includes('تالثه')
+    ) {
+      return 'الصف الثالث الإعدادي';
+    }
+    if (
+      /(?:^|\s)(?:ثاني|ثانية|تاني|تانية|2)(?:\s|$)/.test(normalized) ||
+      /(?:الصف|سنة)\s*(?:الثاني|الثانية|التاني|التانية)/.test(normalized) ||
+      digits.includes('2')
+    ) {
+      return 'الصف الثاني الإعدادي';
+    }
+    if (normalized.includes('اول') || digits.includes('1') || normalized.includes('اولي')) {
+      return 'الصف الأول الإعدادي';
+    }
     return 'الصف الأول الإعدادي';
   }
 
-  // Primary
-  if (str.includes('ابتدائ') || str.includes('ابتدائي')) {
-    if (str.includes('سادس') || str.includes('6') || str.includes('٦')) return 'الصف السادس الابتدائي';
-    if (str.includes('خامس') || str.includes('5') || str.includes('٥')) return 'الصف الخامس الابتدائي';
-    if (str.includes('رابع') || str.includes('4') || str.includes('٤')) return 'الصف الرابع الابتدائي';
-    if (str.includes('ثالث') || str.includes('3') || str.includes('٣')) return 'الصف الثالث الابتدائي';
-    if (str.includes('ثان') || str.includes('2') || str.includes('٢')) return 'الصف الثاني الابتدائي';
+  // Primary School (ابتدائي / ابتدائى / ب / primary / pri)
+  if (
+    normalized.includes('ابتدائ') ||
+    digits.includes('primary') ||
+    digits.includes('pri') ||
+    /(?:^|[^\w\u0600-\u06FF])[1-6]\s*ب(?:[^\w\u0600-\u06FF]|$)/.test(digits) ||
+    /(?:^|[^\w\u0600-\u06FF])ب\s*[1-6](?:[^\w\u0600-\u06FF]|$)/.test(digits)
+  ) {
+    if (
+      normalized.includes('سادس') ||
+      normalized.includes('سات') ||
+      digits.includes('6') ||
+      normalized.includes('ست') ||
+      normalized.includes('ساته')
+    ) {
+      return 'الصف السادس الابتدائي';
+    }
+    if (normalized.includes('خامس') || digits.includes('5') || normalized.includes('خامسه')) {
+      return 'الصف الخامس الابتدائي';
+    }
+    if (normalized.includes('رابع') || digits.includes('4') || normalized.includes('رابعه')) {
+      return 'الصف الرابع الابتدائي';
+    }
+    if (
+      normalized.includes('تالت') ||
+      normalized.includes('ثالث') ||
+      digits.includes('3') ||
+      normalized.includes('تالته') ||
+      normalized.includes('ثالثه')
+    ) {
+      return 'الصف الثالث الابتدائي';
+    }
+    if (
+      /(?:^|\s)(?:ثاني|ثانية|تاني|تانية|2)(?:\s|$)/.test(normalized) ||
+      /(?:الصف|سنة)\s*(?:الثاني|الثانية|التاني|التانية)/.test(normalized) ||
+      digits.includes('2')
+    ) {
+      return 'الصف الثاني الابتدائي';
+    }
+    if (normalized.includes('اول') || digits.includes('1') || normalized.includes('اولي')) {
+      return 'الصف الأول الابتدائي';
+    }
     return 'الصف الأول الابتدائي';
   }
 
-  if (str.includes('أخرى') || str.includes('اخري') || str.includes('جامع') || str.includes('خريج')) {
+  // Grade numbers alone: 1-12 or "Grade X"
+  const numMatch = digits.match(/(?:^|[^\d])(1[0-2]|[1-9])(?:[^\d]|$)/);
+  if (numMatch) {
+    const n = parseInt(numMatch[1], 10);
+    switch (n) {
+      case 1:
+        return 'الصف الأول الابتدائي';
+      case 2:
+        return 'الصف الثاني الابتدائي';
+      case 3:
+        return 'الصف الثالث الابتدائي';
+      case 4:
+        return 'الصف الرابع الابتدائي';
+      case 5:
+        return 'الصف الخامس الابتدائي';
+      case 6:
+        return 'الصف السادس الابتدائي';
+      case 7:
+        return 'الصف الأول الإعدادي';
+      case 8:
+        return 'الصف الثاني الإعدادي';
+      case 9:
+        return 'الصف الثالث الإعدادي';
+      case 10:
+        return 'الصف الأول الثانوي';
+      case 11:
+        return 'الصف الثاني الثانوي';
+      case 12:
+        return 'الصف الثالث الثانوي';
+    }
+  }
+
+  // Word ordinal alone (رابعة, خامسة, اولى, ثانية, سادسة...)
+  if (normalized.includes('سادس') || normalized.includes('ساته')) return 'الصف السادس الابتدائي';
+  if (normalized.includes('خامس') || normalized.includes('خامسه')) return 'الصف الخامس الابتدائي';
+  if (normalized.includes('رابع') || normalized.includes('رابعه')) return 'الصف الرابع الابتدائي';
+  if (normalized.includes('تالت') || normalized.includes('ثالث')) return 'الصف الثالث الابتدائي';
+  if (
+    /(?:^|\s)(?:ثاني|ثانية|تاني|تانية)(?:\s|$)/.test(normalized) ||
+    /(?:الصف|سنة)\s*(?:الثاني|الثانية|التاني|التانية)/.test(normalized)
+  ) {
+    return 'الصف الثاني الابتدائي';
+  }
+  if (normalized.includes('اول') || normalized.includes('اولي')) return 'الصف الأول الابتدائي';
+
+  if (
+    normalized.includes('اخرى') ||
+    normalized.includes('جامع') ||
+    normalized.includes('خريج') ||
+    normalized.includes('تمهيد') ||
+    normalized.includes('حضان') ||
+    normalized.includes('kg')
+  ) {
     return 'أخرى';
   }
 
-  return 'أخرى';
+  return 'الصف الأول الابتدائي';
 }
 
 // Authentication Middleware
@@ -234,8 +390,32 @@ function safeRollback(db: any): void {
 }
 
 /**
+ * Extracts Google Drive File ID from any Google Drive link format.
+ */
+function extractGoogleDriveFileId(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const url = rawUrl.trim();
+  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m1) return m1[1];
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (
+    m2 &&
+    (url.includes('drive.google.com') ||
+      url.includes('docs.google.com') ||
+      url.includes('googleusercontent.com'))
+  ) {
+    return m2[1];
+  }
+  const m3 = url.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (m3) return m3[1];
+  const m4 = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (m4 && url.includes('drive.google.com')) return m4[1];
+  return null;
+}
+
+/**
  * Normalizes an external image link (especially Google Drive, Dropbox, OneDrive, etc.)
- * into a direct download URL.
+ * into a direct usable URL or local path.
  */
 function convertToDirectImageUrl(rawUrl: string | null | undefined): string | null {
   if (!rawUrl || typeof rawUrl !== 'string') return null;
@@ -247,46 +427,132 @@ function convertToDirectImageUrl(rawUrl: string | null | undefined): string | nu
     return url;
   }
 
-  // Google Drive standard file link: https://drive.google.com/file/d/FILE_ID/view...
-  const driveFileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (driveFileMatch && driveFileMatch[1]) {
-    return `https://drive.google.com/uc?export=download&id=${driveFileMatch[1]}`;
+  // Local filename candidate
+  const baseName = path.basename(url);
+  if (fs.existsSync(path.join(PHOTOS_DIR, baseName))) {
+    return `/data/photos/${baseName}`;
   }
 
-  // Google Drive open or uc links with id parameter: https://drive.google.com/open?id=FILE_ID
-  const driveIdParam = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if ((url.includes('drive.google.com') || url.includes('docs.google.com')) && driveIdParam && driveIdParam[1]) {
-    return `https://drive.google.com/uc?export=download&id=${driveIdParam[1]}`;
+  // Google Drive
+  const driveId = extractGoogleDriveFileId(url);
+  if (driveId) {
+    return `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
   }
 
   // Dropbox share links
   if (url.includes('dropbox.com')) {
-    return url.replace('?dl=0', '?dl=1');
+    return url.replace(/[?&]dl=0/, '?raw=1').replace(/[?&]dl=1/, '?raw=1');
   }
 
   return url;
 }
 
 /**
- * Downloads an image from a URL (handling HTTP/HTTPS redirects and timeouts)
+ * Normalizes member code from Excel or CSV import.
+ * Strictly respects codes from the file like A250001, a250001, 250001, sequential numbers like 1 -> A250001, or custom strings.
+ */
+function normalizeMemberCodeFromImport(val: any): string | null {
+  if (val === null || val === undefined) return null;
+  const str = String(val).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  if (!str) return null;
+
+  // Ignore if numeric string is 10+ digits (likely a national ID or phone number)
+  if (/^\d{10,}$/.test(str)) {
+    return null;
+  }
+
+  // Standard A25 format: e.g. "A250001", "a250001", "A25-0001", "A25_0001"
+  const a25Match = str.match(/^A25[-_]?0*(\d+)$/i);
+  if (a25Match) {
+    const num = parseInt(a25Match[1], 10);
+    return `A25${String(num).padStart(4, '0')}`;
+  }
+
+  // Numeric starting with 25... e.g. 250001 -> A250001
+  const num25Match = str.match(/^250*(\d{1,5})$/);
+  if (num25Match) {
+    const num = parseInt(num25Match[1], 10);
+    return `A25${String(num).padStart(4, '0')}`;
+  }
+
+  // Simple sequential integer number (e.g. 1 -> A250001, 15 -> A250015, 150 -> A250150)
+  const intMatch = str.match(/^(\d{1,4})$/);
+  if (intMatch) {
+    const num = parseInt(intMatch[1], 10);
+    if (num > 0) {
+      return `A25${String(num).padStart(4, '0')}`;
+    }
+  }
+
+  // Any other custom alphanumeric code: uppercase it
+  return str.toUpperCase();
+}
+
+/**
+ * Extracts rows from an Excel worksheet while preserving embedded cell hyperlinks and formulas.
+ */
+function extractSheetRowsWithHyperlinks(sheet: XLSX.WorkSheet): any[] {
+  if (!sheet || !sheet['!ref']) return [];
+  try {
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+        const cell = sheet[cellAddress];
+        if (cell) {
+          if (cell.l && cell.l.Target) {
+            const valStr = String(cell.v || '').trim();
+            if (!valStr.startsWith('http://') && !valStr.startsWith('https://')) {
+              cell.v = cell.l.Target;
+            }
+          } else if (cell.f && typeof cell.f === 'string') {
+            const formulaMatch = cell.f.match(/HYPERLINK\s*\(\s*["']([^"']+)["']/i);
+            if (formulaMatch && formulaMatch[1]) {
+              const valStr = String(cell.v || '').trim();
+              if (!valStr.startsWith('http://') && !valStr.startsWith('https://')) {
+                cell.v = formulaMatch[1];
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[EXCEL_HYPERLINKS] Warning extracting hyperlinks:', err);
+  }
+  return XLSX.utils.sheet_to_json(sheet);
+}
+
+/**
+ * Downloads an image from a URL (handling HTTP/HTTPS redirects, Google Drive API OAuth tokens, and timeouts)
  * and safely writes it to PHOTOS_DIR, returning the local web path `/data/photos/{filename}`.
+ * If server download fails (e.g. timeout),
+ * it returns a direct client-accessible URL fallback instead of null.
  */
 async function downloadImageAndSaveLocally(
   rawUrl: string,
-  identifier: string
+  identifier: string,
+  googleAccessToken?: string | null
 ): Promise<string | null> {
-  const directUrl = convertToDirectImageUrl(rawUrl);
-  if (!directUrl) return null;
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
 
   // If already a local path, preserve it
-  if (directUrl.startsWith('/data/photos/')) {
-    return directUrl;
+  if (trimmed.startsWith('/data/photos/')) {
+    return trimmed;
+  }
+
+  // If filename in PHOTOS_DIR
+  const baseName = path.basename(trimmed);
+  if (fs.existsSync(path.join(PHOTOS_DIR, baseName))) {
+    return `/data/photos/${baseName}`;
   }
 
   // Handle base64 data URI
-  if (directUrl.startsWith('data:image/')) {
+  if (trimmed.startsWith('data:image/')) {
     try {
-      const match = directUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      const match = trimmed.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
       if (match) {
         let ext = match[1].toLowerCase();
         if (ext === 'jpeg') ext = 'jpg';
@@ -294,6 +560,7 @@ async function downloadImageAndSaveLocally(
         const safeId = identifier.replace(/[^a-zA-Z0-9_-]/g, '_');
         const filename = `${safeId}_${Date.now()}.${ext}`;
         const targetPath = path.join(PHOTOS_DIR, filename);
+        if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
         fs.writeFileSync(targetPath, buffer);
         return `/data/photos/${filename}`;
       }
@@ -303,8 +570,29 @@ async function downloadImageAndSaveLocally(
     }
   }
 
+  const driveId = extractGoogleDriveFileId(trimmed);
+
+  // List of candidate URLs to attempt fetching
+  const candidateUrls: { url: string; authBearer?: string }[] = [];
+  if (driveId) {
+    if (googleAccessToken) {
+      // Direct authenticated Google Drive API download
+      candidateUrls.push({
+        url: `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media&supportsAllDrives=true`,
+        authBearer: googleAccessToken,
+      });
+    }
+    candidateUrls.push({ url: `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` });
+    candidateUrls.push({ url: `https://lh3.googleusercontent.com/d/${driveId}=w1200` });
+    candidateUrls.push({ url: `https://drive.usercontent.google.com/download?id=${driveId}&export=download` });
+    candidateUrls.push({ url: `https://drive.google.com/uc?export=download&id=${driveId}` });
+  } else {
+    const direct = convertToDirectImageUrl(trimmed);
+    if (direct) candidateUrls.push({ url: direct });
+  }
+
   // Helper to fetch buffer following redirects
-  const fetchBuffer = (targetUrl: string, redirectCount = 0): Promise<{ buffer: Buffer; contentType: string }> => {
+  const fetchBuffer = (targetUrl: string, authBearer?: string, redirectCount = 0): Promise<{ buffer: Buffer; contentType: string }> => {
     return new Promise((resolve, reject) => {
       if (redirectCount > 6) {
         return reject(new Error('Too many redirects'));
@@ -318,22 +606,27 @@ async function downloadImageAndSaveLocally(
       }
 
       const client = parsed.protocol === 'https:' ? https : http;
+      const headers: Record<string, string> = {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      };
+      if (authBearer) {
+        headers['Authorization'] = `Bearer ${authBearer}`;
+      }
+
       const req = client.get(
         parsed,
         {
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            Accept: 'image/*,*/*;q=0.8',
-          },
+          headers,
           timeout: 10000,
         },
         (res) => {
           // Handle HTTP redirects (301, 302, 303, 307, 308)
           if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
             const redirectUrl = new URL(res.headers.location, targetUrl).toString();
-            res.resume(); // consume response to free memory
-            return resolve(fetchBuffer(redirectUrl, redirectCount + 1));
+            res.resume();
+            return resolve(fetchBuffer(redirectUrl, authBearer, redirectCount + 1));
           }
 
           if (res.statusCode !== 200) {
@@ -361,40 +654,50 @@ async function downloadImageAndSaveLocally(
     });
   };
 
-  try {
-    const { buffer, contentType } = await fetchBuffer(directUrl);
+  // Try each candidate sequentially
+  for (const candidate of candidateUrls) {
+    try {
+      const { buffer, contentType } = await fetchBuffer(candidate.url, candidate.authBearer);
+      if (!buffer || buffer.length < 150) continue;
 
-    // Validate minimum image size (at least 100 bytes)
-    if (!buffer || buffer.length < 100) {
-      console.warn(`[PHOTO_DOWNLOAD] Buffer too small (${buffer?.length} bytes) for ${directUrl}`);
-      return null;
+      const lowerType = contentType.toLowerCase();
+      // Ensure NOT an HTML error page
+      if (lowerType.includes('text/html') || lowerType.includes('application/json')) {
+        const headerText = buffer.slice(0, 60).toString('utf-8').toLowerCase();
+        if (headerText.includes('<html') || headerText.includes('<!doctype') || headerText.includes('{')) {
+          continue;
+        }
+      }
+
+      // Determine extension from content-type or magic numbers
+      let ext = 'jpg';
+      if (lowerType.includes('png') || (buffer[0] === 0x89 && buffer[1] === 0x50)) ext = 'png';
+      else if (lowerType.includes('webp') || buffer.slice(8, 12).toString() === 'WEBP') ext = 'webp';
+      else if (lowerType.includes('svg')) ext = 'svg';
+      else if (buffer[0] === 0xff && buffer[1] === 0xd8) ext = 'jpg';
+
+      const safeId = identifier.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `${safeId}_${Date.now()}.${ext}`;
+      const targetPath = path.join(PHOTOS_DIR, filename);
+
+      if (!fs.existsSync(PHOTOS_DIR)) {
+        fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+      }
+
+      fs.writeFileSync(targetPath, buffer);
+      console.log(`[PHOTO_DOWNLOAD] Successfully saved member photo to disk: ${targetPath} (Web URL: /data/photos/${filename})`);
+      return `/data/photos/${filename}`;
+    } catch {
+      // Continue to next candidate
     }
-
-    // Determine extension from content-type or url
-    let ext = 'jpg';
-    const lowerType = contentType.toLowerCase();
-    if (lowerType.includes('png')) ext = 'png';
-    else if (lowerType.includes('webp')) ext = 'webp';
-    else if (lowerType.includes('svg')) ext = 'svg';
-    else if (lowerType.includes('jpeg') || lowerType.includes('jpg')) ext = 'jpg';
-    else if (directUrl.endsWith('.png')) ext = 'png';
-    else if (directUrl.endsWith('.webp')) ext = 'webp';
-
-    const safeId = identifier.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filename = `${safeId}_${Date.now()}.${ext}`;
-    const targetPath = path.join(PHOTOS_DIR, filename);
-
-    if (!fs.existsSync(PHOTOS_DIR)) {
-      fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-    }
-
-    fs.writeFileSync(targetPath, buffer);
-    console.log(`[PHOTO_DOWNLOAD] Successfully saved member photo: /data/photos/${filename}`);
-    return `/data/photos/${filename}`;
-  } catch (err: any) {
-    console.warn(`[PHOTO_DOWNLOAD] Warning: Could not download photo from ${directUrl}:`, err.message);
-    return null;
   }
+
+  // Fallback: If server download could not complete, return the direct browser-loadable URL
+  if (driveId) {
+    return `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+  }
+  const fallbackUrl = convertToDirectImageUrl(trimmed);
+  return fallbackUrl || trimmed;
 }
 
 async function startServer() {
@@ -5095,6 +5398,7 @@ async function startServer() {
   app.get('/api/csv/template', authenticate, async (req: Request, res: Response) => {
     try {
       const headers = [
+        'كود العضو',
         'اسم الطالبة',
         'اسم الطالبة بالإنجليزية',
         'اسم ولي الأمر',
@@ -5116,6 +5420,7 @@ async function startServer() {
       ];
 
       const sampleRow = [
+        'A250001',
         'مريم هاني ميخائيل',
         'Mary Hany Mikhail',
         'هاني ميخائيل',
@@ -5250,15 +5555,59 @@ async function startServer() {
 
       let rows: any[] = [];
       const fileName = req.file.originalname || '';
+      const isZip = fileName.toLowerCase().endsWith('.zip') || req.file.mimetype.includes('zip');
       const isCsv = fileName.toLowerCase().endsWith('.csv') || req.file.mimetype.includes('csv');
 
-      if (isCsv) {
+      if (isZip) {
+        // Support ZIP archive containing an Excel/CSV file + member images
+        try {
+          const zip = await JSZip.loadAsync(req.file.buffer);
+          if (!fs.existsSync(PHOTOS_DIR)) {
+            fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+          }
+
+          // 1. Extract any image files into PHOTOS_DIR
+          const imageEntries = Object.keys(zip.files).filter((relPath) => {
+            const lower = relPath.toLowerCase();
+            return !zip.files[relPath].dir && /\.(jpe?g|png|webp|gif|bmp)$/i.test(lower);
+          });
+
+          for (const imgPath of imageEntries) {
+            const fileData = await zip.files[imgPath].async('nodebuffer');
+            const cleanBaseName = path.basename(imgPath);
+            fs.writeFileSync(path.join(PHOTOS_DIR, cleanBaseName), fileData);
+          }
+
+          // 2. Find and parse the spreadsheet inside the zip
+          const sheetEntryName = Object.keys(zip.files).find((relPath) => {
+            const lower = relPath.toLowerCase();
+            return !zip.files[relPath].dir && (lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv'));
+          });
+
+          if (!sheetEntryName) {
+            return res.status(400).json({ error: 'لم يتم العثور على ملف Excel أو CSV داخل ملف ZIP المضغوط' });
+          }
+
+          const sheetBuffer = await zip.files[sheetEntryName].async('nodebuffer');
+          if (sheetEntryName.toLowerCase().endsWith('.csv')) {
+            const csvStr = sheetBuffer.toString('utf-8').replace(/^\uFEFF/, '');
+            const wb = XLSX.read(csvStr, { type: 'string' });
+            rows = extractSheetRowsWithHyperlinks(wb.Sheets[wb.SheetNames[0]]);
+          } else {
+            const wb = XLSX.read(sheetBuffer, { type: 'buffer' });
+            const sheetName = wb.SheetNames.find((s) => s.toLowerCase().includes('member') || s.includes('أعضاء')) || wb.SheetNames[0];
+            rows = extractSheetRowsWithHyperlinks(wb.Sheets[sheetName]);
+          }
+        } catch (zipErr: any) {
+          return res.status(400).json({ error: 'فشل قراءة ملف ZIP: ' + (zipErr.message || '') });
+        }
+      } else if (isCsv) {
         // Parse CSV with UTF-8 support
         const csvStr = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, '');
         try {
           const wb = XLSX.read(csvStr, { type: 'string' });
           const firstSheet = wb.Sheets[wb.SheetNames[0]];
-          rows = XLSX.utils.sheet_to_json(firstSheet);
+          rows = extractSheetRowsWithHyperlinks(firstSheet);
         } catch {
           // Fallback simple CSV parser
           const lines = csvStr.split(/\r?\n/).filter((l) => l.trim().length > 0);
@@ -5275,20 +5624,35 @@ async function startServer() {
           }
         }
       } else {
-        // Parse Excel workbook
+        // Parse Excel workbook preserving hyperlinks & formulas
         const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheetName = wb.SheetNames.find((s) => s.toLowerCase().includes('member') || s.includes('أعضاء')) || wb.SheetNames[0];
-        rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+        rows = extractSheetRowsWithHyperlinks(wb.Sheets[sheetName]);
       }
 
       if (!Array.isArray(rows) || rows.length === 0) {
         return res.status(400).json({ error: 'الملف المرفوع فارغ أو لا يحتوي على أي صفوف بيانات صالحة' });
       }
 
+      const cleanKey = (k: string) =>
+        k
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .replace(/[\r\n\t_]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
+
       const getVal = (row: any, ...keys: string[]) => {
+        if (!row || typeof row !== 'object') return '';
+        const rowKeys = Object.keys(row);
         for (const k of keys) {
+          const target = cleanKey(k);
           if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') {
             return String(row[k]).trim();
+          }
+          const foundKey = rowKeys.find((rk) => cleanKey(rk) === target);
+          if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && String(row[foundKey]).trim() !== '') {
+            return String(row[foundKey]).trim();
           }
         }
         return '';
@@ -5296,10 +5660,23 @@ async function startServer() {
 
       const db = await getDb();
 
-      // Query existing national IDs to prevent duplicates
-      const existingMembers = queryAll(db, 'SELECT national_id, member_code FROM members');
-      const existingNatIds = new Set(existingMembers.map((m) => String(m.national_id).trim()));
-      const existingCodes = new Set(existingMembers.map((m) => String(m.member_code).trim()));
+      // Query existing members by national_id and member_code
+      const existingMembers = queryAll(db, 'SELECT id, national_id, member_code FROM members');
+      const existingNatIdToMemberMap = new Map<string, { id: number; member_code: string }>();
+      const existingNatIds = new Set<string>();
+      const existingCodes = new Set<string>();
+
+      for (const m of existingMembers) {
+        const natId = String(m.national_id || '').trim();
+        const code = String(m.member_code || '').trim();
+        if (natId) {
+          existingNatIds.add(natId);
+          existingNatIdToMemberMap.set(natId, { id: m.id, member_code: code });
+        }
+        if (code) {
+          existingCodes.add(code.toUpperCase());
+        }
+      }
 
       // Get existing tribes map
       const existingTribes = queryAll(db, 'SELECT id, name FROM tribes');
@@ -5310,46 +5687,95 @@ async function startServer() {
 
       const seenNatIdsInBatch = new Set<string>();
       const validatedList: any[] = [];
+      const toUpdateList: any[] = [];
       const skippedRows: string[] = [];
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
         const rowNum = i + 2; // header is row 1
 
-        const studentName = getVal(r, 'اسم الطالبة', 'student_name', 'Student Name', 'الاسم', 'اسم الطالب');
-        const studentNameEn = getVal(r, 'اسم الطالبة بالإنجليزية', 'اسم الطالبة بالانجليزية', 'student_name_en', 'Student Name En', 'English Name');
-        const guardianName = getVal(r, 'اسم ولي الأمر', 'guardian_name', 'Guardian Name', 'ولي الأمر') || studentName;
+        const studentName = getVal(
+          r,
+          'اسم الطالبة', 'اسم الطالب', 'اسم العضو', 'اسم العضوة', 'الاسم', 'اسم المشترك', 'student_name', 'Student Name', 'name', 'Name'
+        );
+        const studentNameEn = getVal(
+          r,
+          'اسم الطالبة بالإنجليزية', 'اسم الطالبة بالانجليزية', 'student_name_en', 'Student Name En', 'English Name', 'english_name'
+        );
+        const guardianName = getVal(
+          r,
+          'اسم ولي الأمر', 'ولي الأمر', 'اسم الأب', 'guardian_name', 'Guardian Name', 'father_name'
+        ) || studentName;
         const fatherJob = getVal(r, 'وظيفة الأب', 'father_job', 'Father Job', 'مهنة الأب');
         const motherName = getVal(r, 'اسم الأم', 'mother_name', 'Mother Name');
         const motherJob = getVal(r, 'وظيفة الأم', 'mother_job', 'Mother Job', 'مهنة الأم');
-        const rawNatId = getVal(r, 'الرقم القومي', 'national_id', 'National ID', 'الرقم_القومي');
+        const rawNatId = getVal(r, 'الرقم القومي', 'national_id', 'National ID', 'الرقم_القومي', 'رقم قومي');
         const nationalId = rawNatId.replace(/\D/g, '');
-        const memberCode = getVal(r, 'كود العضو', 'member_code', 'Member Code', 'الكود');
+        
+        // Extract member code using all common Arabic and English column header variations
+        const rawMemberCode = getVal(
+          r,
+          'كود العضو', 'كود العضوة', 'كود الطالبة', 'كود الطالب', 'كود القائد', 'كود المشترك', 'كود المشتركة',
+          'كود الكشافة', 'الكود الكشفي', 'كود العضوية', 'رقم العضوية', 'رقم القيد', 'الكود', 'كود',
+          'member_code', 'Member Code', 'MemberCode', 'memberCode', 'Member_Code', 'Code', 'code', 'CODE',
+          'Scout Code', 'scout_code', 'Member ID', 'member_id', 'MemberId', 'ID'
+        );
+        const memberCode = normalizeMemberCodeFromImport(rawMemberCode);
         const birthDate = getVal(r, 'تاريخ الميلاد', 'birth_date', 'Birth Date');
-        const schoolStage = normalizeGrade(getVal(r, 'الصف الدراسي', 'الصف', 'المرحلة الدراسية', 'المرحلة', 'school_stage', 'Stage', 'Grade'));
+        
+        // Exact normalized grade mapping
+        const rawStage = getVal(r, 'الصف الدراسي', 'الصف', 'المرحلة الدراسية', 'المرحلة', 'school_stage', 'Stage', 'Grade', 'السنة الدراسية');
+        const schoolStage = normalizeGrade(rawStage);
+
         const scoutJoinYearStr = getVal(r, 'سنة الالتحاق', 'scout_join_year', 'Join Year');
-        const memberType = getVal(r, 'الصفة', 'member_type', 'Type') || 'عضوة';
-        const tribeName = getVal(r, 'اسم العشيرة', 'العشيرة', 'tribe_name', 'Tribe');
+        const memberType = getVal(r, 'الصفة', 'member_type', 'Type', 'النوع', 'صفة العضو') || 'عضوة';
+        const tribeName = getVal(r, 'اسم العشيرة', 'العشيرة', 'tribe_name', 'Tribe', 'الفريق');
         const address = getVal(r, 'عنوان المنزل بالتفصيل', 'عنوان المنزل', 'العنوان', 'address', 'Address');
         const talentsSkills = getVal(r, 'الموهبة والمهارة', 'الموهبة و المهارة', 'الموهبة', 'المهارة', 'talents_skills', 'Talents and Skills');
         const medicalCondition = getVal(r, 'الحالة المرضية', 'medical_condition', 'Medical');
-        const fatherPhone = getVal(r, 'تليفون الأب', 'father_phone', 'Father Phone', 'هاتف الأب');
-        const motherPhone = getVal(r, 'تليفون الأم', 'mother_phone', 'Mother Phone', 'هاتف الأم');
-        const rawPhotoUrl = getVal(
+        const fatherPhone = getVal(r, 'تليفون الأب', 'father_phone', 'Father Phone', 'هاتف الأب', 'موبايل الأب');
+        const motherPhone = getVal(r, 'تليفون الأم', 'mother_phone', 'Mother Phone', 'هاتف الأم', 'موبايل الأم');
+
+        let rawPhotoUrl = getVal(
           r,
           'رابط الصورة',
           'رابط صورة العضو',
           'لينك الصورة',
           'الصورة',
+          'صورة',
+          'صورة العضو',
           'photo_url',
           'Photo URL',
           'photo_link',
+          'Photo Link',
           'image_url',
+          'Image URL',
           'رابط استرداد صور العضو',
           'رابط استرداد الصورة',
           'مسار الصورة',
-          'photo_path'
+          'photo_path',
+          'Photo Path',
+          'photo',
+          'Photo',
+          'image',
+          'Image',
+          'Google Drive',
+          'drive'
         );
+
+        // If no explicit photo column was found, look for any column containing a URL or image extension
+        if (!rawPhotoUrl) {
+          for (const k of Object.keys(r)) {
+            const val = String(r[k] || '').trim();
+            if (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image/')) {
+              rawPhotoUrl = val;
+              break;
+            } else if (/\.(jpe?g|png|webp|gif|bmp)$/i.test(val)) {
+              rawPhotoUrl = val;
+              break;
+            }
+          }
+        }
 
         // Ignore dummy or template sample rows
         if (studentName === 'مريم هاني ميخائيل' && nationalId === '31008150109988' && rows.length > 1) {
@@ -5366,8 +5792,45 @@ async function startServer() {
           continue;
         }
 
-        if (existingNatIds.has(nationalId)) {
-          skippedRows.push(`الصف ${rowNum} (${studentName}): الرقم القومي (${nationalId}) مسجل مسبقاً في النظام`);
+        let joinYear = parseInt(scoutJoinYearStr, 10);
+        if (isNaN(joinYear) || joinYear < 1980 || joinYear > 2100) {
+          joinYear = new Date().getFullYear();
+        }
+
+        const existingMember = existingNatIdToMemberMap.get(nationalId);
+        if (existingMember) {
+          // If member is already in the database and a memberCode is provided in Excel, update their code!
+          if (memberCode && memberCode.toUpperCase() !== existingMember.member_code.toUpperCase()) {
+            if (!existingCodes.has(memberCode.toUpperCase())) {
+              toUpdateList.push({
+                id: existingMember.id,
+                newCode: memberCode,
+                studentName,
+                studentNameEn: studentNameEn || null,
+                guardianName,
+                fatherJob: fatherJob || null,
+                motherName: motherName || null,
+                motherJob: motherJob || null,
+                schoolStage,
+                joinYear,
+                memberType: memberType.includes('قائد') ? 'قائد' : 'عضوة',
+                tribeName: tribeName || null,
+                address: address || null,
+                talentsSkills: talentsSkills || null,
+                medicalCondition: medicalCondition || null,
+                fatherPhone: fatherPhone || null,
+                motherPhone: motherPhone || null,
+                rawPhotoUrl: rawPhotoUrl || null,
+                downloadedPhotoPath: null as string | null,
+              });
+              existingCodes.delete(existingMember.member_code.toUpperCase());
+              existingCodes.add(memberCode.toUpperCase());
+            } else {
+              skippedRows.push(`الصف ${rowNum} (${studentName}): الرقم القومي (${nationalId}) مسجل مسبقاً، وكود العضو (${memberCode}) محجوز لعضو آخر`);
+            }
+          } else {
+            skippedRows.push(`الصف ${rowNum} (${studentName}): الرقم القومي (${nationalId}) مسجل مسبقاً في النظام`);
+          }
           continue;
         }
 
@@ -5377,17 +5840,6 @@ async function startServer() {
         }
 
         seenNatIdsInBatch.add(nationalId);
-
-        let finalStage: 'تمهيدي' | 'ابتدائي' | 'إعدادي' | 'ثانوي' | 'جامعة' = 'ابتدائي';
-        if (schoolStage.includes('تمهيد')) finalStage = 'تمهيدي';
-        else if (schoolStage.includes('إعداد') || schoolStage.includes('اعداد')) finalStage = 'إعدادي';
-        else if (schoolStage.includes('ثانو') || schoolStage.includes('ثانوي')) finalStage = 'ثانوي';
-        else if (schoolStage.includes('جامع')) finalStage = 'جامعة';
-
-        let joinYear = parseInt(scoutJoinYearStr, 10);
-        if (isNaN(joinYear) || joinYear < 1980 || joinYear > 2100) {
-          joinYear = new Date().getFullYear();
-        }
 
         validatedList.push({
           studentName,
@@ -5399,7 +5851,7 @@ async function startServer() {
           nationalId,
           memberCode: memberCode || null,
           birthDate: birthDate || '2012-01-01',
-          schoolStage: finalStage,
+          schoolStage,
           joinYear,
           memberType: memberType.includes('قائد') ? 'قائد' : 'عضوة',
           tribeName: tribeName || null,
@@ -5413,39 +5865,64 @@ async function startServer() {
         });
       }
 
-      if (validatedList.length === 0) {
+      if (validatedList.length === 0 && toUpdateList.length === 0) {
         return res.status(400).json({
-          error: 'لم يتم العثور على أي صفوف بيانات صالحة للإضافة',
+          error: 'لم يتم العثور على أي صفوف بيانات صالحة للإضافة أو التحديث',
           details: skippedRows,
         });
       }
 
-      // Download member photos from external URLs (Google Drive, etc.) asynchronously BEFORE database transaction
+      // Check for Google Drive access token passed via header or body
+      const googleAccessToken = (req.headers['x-google-access-token'] as string) || req.body?.google_access_token || null;
+
+      // Download member photos from external URLs or link local files
       let downloadedPhotosCount = 0;
-      for (const m of validatedList) {
+      for (const m of [...validatedList, ...toUpdateList]) {
         if (m.rawPhotoUrl) {
           try {
+            // Check if matches a local file (e.g. from ZIP or already in PHOTOS_DIR)
+            const baseName = path.basename(m.rawPhotoUrl);
+            if (fs.existsSync(path.join(PHOTOS_DIR, baseName))) {
+              m.downloadedPhotoPath = `/data/photos/${baseName}`;
+              downloadedPhotosCount++;
+              continue;
+            }
+
+            // Also check if matches nationalId or memberCode filename
+            const matchedLocal = [`${m.nationalId}.jpg`, `${m.nationalId}.png`, `${m.memberCode || m.newCode}.jpg`, `${m.memberCode || m.newCode}.png`].find((f) =>
+              fs.existsSync(path.join(PHOTOS_DIR, f))
+            );
+            if (matchedLocal) {
+              m.downloadedPhotoPath = `/data/photos/${matchedLocal}`;
+              downloadedPhotosCount++;
+              continue;
+            }
+
             const savedLocalPath = await downloadImageAndSaveLocally(
               m.rawPhotoUrl,
-              `batch_${m.nationalId}`
+              `batch_${m.nationalId || m.id}`,
+              googleAccessToken
             );
             if (savedLocalPath) {
               m.downloadedPhotoPath = savedLocalPath;
               downloadedPhotosCount++;
+            } else {
+              m.downloadedPhotoPath = convertToDirectImageUrl(m.rawPhotoUrl);
             }
           } catch (photoErr: any) {
-            console.warn(`[BATCH_IMPORT] Could not download photo for nationalId ${m.nationalId}:`, photoErr?.message);
+            console.warn(`[BATCH_IMPORT] Could not download photo for nationalId ${m.nationalId || m.id}:`, photoErr?.message);
+            m.downloadedPhotoPath = convertToDirectImageUrl(m.rawPhotoUrl);
           }
         }
       }
 
-      // Execute Batch Insertion in Transaction
+      // Execute Batch Insertion & Updates in Transaction
       db.run('BEGIN TRANSACTION;');
       try {
         const now = new Date().toISOString();
 
         // 1. Create any missing tribes referenced in the batch
-        for (const m of validatedList) {
+        for (const m of [...validatedList, ...toUpdateList]) {
           if (m.tribeName && !tribeMap.has(m.tribeName)) {
             const countStmt = queryOne(db, 'SELECT COUNT(*) as count FROM tribes');
             const nextCode = `TR-${String((countStmt?.count || 0) + 1).padStart(3, '0')}`;
@@ -5460,34 +5937,66 @@ async function startServer() {
           }
         }
 
-        // 2. Determine next sequence counter for member codes starting from sc000150
-        let maxSeq = 149;
+        // 2. Determine sequence counter for member codes starting from A250001 (seq 0)
+        let maxSeq = 0;
         const counterStmt = queryOne(db, "SELECT value FROM system_counters WHERE key = 'member_seq'");
-        if (counterStmt?.value && Number(counterStmt.value) >= 149 && Number(counterStmt.value) < 250000) {
+        if (counterStmt?.value !== undefined && Number(counterStmt.value) >= 0 && Number(counterStmt.value) < 250000) {
           maxSeq = Number(counterStmt.value);
         }
 
         // Check max sequence from existing codes in database
         for (const existing of existingCodes) {
-          const match = existing.match(/^sc0*(\d+)$/i);
-          if (match) {
-            const num = parseInt(match[1], 10);
+          const matchA25 = existing.match(/^A250*(\d+)$/i);
+          const matchSC = existing.match(/^sc0*(\d+)$/i);
+          if (matchA25) {
+            const num = parseInt(matchA25[1], 10);
             if (num > maxSeq) maxSeq = num;
+          } else if (matchSC) {
+            const num = parseInt(matchSC[1], 10);
+            if (num > maxSeq) maxSeq = num;
+          }
+        }
+
+        // Ensure maxSeq stays above any A25 codes explicitly provided in the batch
+        for (const m of validatedList) {
+          if (m.memberCode) {
+            const matchA25 = m.memberCode.match(/^A250*(\d+)$/i);
+            if (matchA25) {
+              const num = parseInt(matchA25[1], 10);
+              if (num > maxSeq) maxSeq = num;
+            }
+          }
+        }
+        for (const u of toUpdateList) {
+          if (u.newCode) {
+            const matchA25 = u.newCode.match(/^A250*(\d+)$/i);
+            if (matchA25) {
+              const num = parseInt(matchA25[1], 10);
+              if (num > maxSeq) maxSeq = num;
+            }
           }
         }
 
         let insertedCount = 0;
         for (const m of validatedList) {
           let code = m.memberCode;
-          if (!code || existingCodes.has(code)) {
-            maxSeq++;
-            code = formatMemberCode(maxSeq);
-            while (existingCodes.has(code)) {
+          if (!code) {
+            do {
               maxSeq++;
               code = formatMemberCode(maxSeq);
+            } while (existingCodes.has(code.toUpperCase()));
+          } else {
+            // Strictly adhere to member code from Excel file!
+            // In the rare event of a duplicate code with another record in the system:
+            if (existingCodes.has(code.toUpperCase())) {
+              console.warn(`[BATCH_IMPORT] Member code ${code} from file already exists in database, assigning next sequential code`);
+              do {
+                maxSeq++;
+                code = formatMemberCode(maxSeq);
+              } while (existingCodes.has(code.toUpperCase()));
             }
           }
-          existingCodes.add(code);
+          existingCodes.add(code.toUpperCase());
 
           const tribeId = m.tribeName ? tribeMap.get(m.tribeName) || null : null;
 
@@ -5519,12 +6028,63 @@ async function startServer() {
             m.talentsSkills,
             m.memberType,
             tribeId,
-            m.downloadedPhotoPath || null,
+            m.downloadedPhotoPath || convertToDirectImageUrl(m.rawPhotoUrl) || null,
             now,
             now,
           ]);
           stmt.free();
           insertedCount++;
+        }
+
+        // Apply updates to existing members whose codes or records were provided in the file
+        let updatedCount = 0;
+        for (const u of toUpdateList) {
+          const tribeId = u.tribeName ? tribeMap.get(u.tribeName) || null : null;
+          const uStmt = db.prepare(`
+            UPDATE members SET
+              member_code = ?,
+              student_name = COALESCE(?, student_name),
+              student_name_en = COALESCE(?, student_name_en),
+              guardian_name = COALESCE(?, guardian_name),
+              father_job = COALESCE(?, father_job),
+              mother_name = COALESCE(?, mother_name),
+              mother_job = COALESCE(?, mother_job),
+              school_stage = COALESCE(?, school_stage),
+              scout_join_year = COALESCE(?, scout_join_year),
+              member_type = COALESCE(?, member_type),
+              tribe_id = COALESCE(?, tribe_id),
+              address = COALESCE(?, address),
+              talents_skills = COALESCE(?, talents_skills),
+              medical_condition = COALESCE(?, medical_condition),
+              father_phone = COALESCE(?, father_phone),
+              mother_phone = COALESCE(?, mother_phone),
+              photo_path = COALESCE(?, photo_path),
+              updated_at = ?
+            WHERE id = ?
+          `);
+          uStmt.run([
+            u.newCode,
+            u.studentName,
+            u.studentNameEn,
+            u.guardianName,
+            u.fatherJob,
+            u.motherName,
+            u.motherJob,
+            u.schoolStage,
+            u.joinYear,
+            u.memberType,
+            tribeId,
+            u.address,
+            u.talentsSkills,
+            u.medicalCondition,
+            u.fatherPhone,
+            u.motherPhone,
+            u.downloadedPhotoPath || convertToDirectImageUrl(u.rawPhotoUrl) || null,
+            now,
+            u.id,
+          ]);
+          uStmt.free();
+          updatedCount++;
         }
 
         // Update system counter
@@ -5538,16 +6098,17 @@ async function startServer() {
           'BATCH_IMPORT',
           null,
           null,
-          `إضافة جماعية لعدد (${insertedCount}) عضو دفعة واحدة من ملف ${fileName} (مع استرداد ${downloadedPhotosCount} صورة بنجاح)`
+          `إضافة جماعية لعدد (${insertedCount}) عضو وتحديث (${updatedCount}) عضو دفعة واحدة من ملف ${fileName} (مع استرداد ${downloadedPhotosCount} صورة بنجاح)`
         );
 
         res.json({
           success: true,
           count: insertedCount,
+          updatedCount,
           skippedCount: skippedRows.length,
           skippedDetails: skippedRows,
           downloadedPhotosCount,
-          message: `تمت إضافة (${insertedCount}) عضو جديد بنجاح إلى النظام دفعة واحدة${downloadedPhotosCount > 0 ? ` واسترداد (${downloadedPhotosCount}) صورة شخصية` : ''}`,
+          message: `تمت معالجة البيانات بنجاح: إضافة (${insertedCount}) عضو جديد${updatedCount > 0 ? ` وتحديث بيانات وأكواد (${updatedCount}) عضو` : ''}${downloadedPhotosCount > 0 ? ` واسترداد (${downloadedPhotosCount}) صورة شخصية` : ''}`,
         });
       } catch (transErr) {
         safeRollback(db);
@@ -5556,6 +6117,120 @@ async function startServer() {
     } catch (err: any) {
       console.error('Batch import error:', err);
       res.status(500).json({ error: err.message || 'فشلت عملية استيراد الأعضاء دفعة واحدة' });
+    }
+  });
+
+  // Repair / Normalize all existing member grades to standard school grades
+  app.post('/api/members/normalize-all-grades', authenticate, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as SessionUser;
+      const db = await getDb();
+      const members = queryAll(db, 'SELECT id, student_name, school_stage, birth_date, national_id FROM members');
+      let updatedCount = 0;
+
+      db.run('BEGIN TRANSACTION;');
+      try {
+        const stmt = db.prepare('UPDATE members SET school_stage = ?, updated_at = ? WHERE id = ?');
+        const now = new Date().toISOString();
+
+        for (const m of members) {
+          const current = m.school_stage;
+          const normalized = normalizeGrade(current);
+          if (normalized !== current) {
+            stmt.run([normalized, now, m.id]);
+            updatedCount++;
+          }
+        }
+        stmt.free();
+        db.run('COMMIT;');
+        saveDb();
+
+        logAudit(
+          user.username,
+          'UPDATE_GRADES',
+          null,
+          null,
+          `تصحيح وتوحيد الصفوف الدراسية لعدد (${updatedCount}) عضو`
+        );
+
+        res.json({
+          success: true,
+          updatedCount,
+          totalMembers: members.length,
+          message: `تم تصحيح وتوحيد الصفوف الدراسية لعدد (${updatedCount}) عضو بنجاح`,
+        });
+      } catch (err) {
+        safeRollback(db);
+        throw err;
+      }
+    } catch (err: any) {
+      console.error('Normalize grades error:', err);
+      res.status(500).json({ error: err.message || 'فشل توحيد الصفوف الدراسية' });
+    }
+  });
+
+  // Repair member photos: converts Google Drive links to direct viewable thumbnails and downloads them if possible
+  app.post('/api/members/repair-photos', authenticate, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as SessionUser;
+      const db = await getDb();
+      const members = queryAll(
+        db,
+        "SELECT id, national_id, member_code, photo_path FROM members WHERE photo_path IS NOT NULL AND photo_path != ''"
+      );
+
+      // Check for Google Drive access token passed via header or body
+      const googleAccessToken = (req.headers['x-google-access-token'] as string) || req.body?.google_access_token || null;
+
+      let repairedCount = 0;
+      const now = new Date().toISOString();
+
+      for (const m of members) {
+        const raw = m.photo_path;
+        if (!raw) continue;
+
+        // If it's an external URL (Google Drive, etc.)
+        if (raw.startsWith('http://') || raw.startsWith('https://')) {
+          try {
+            const savedLocal = await downloadImageAndSaveLocally(
+              raw,
+              `repair_${m.national_id || m.member_code || m.id}`,
+              googleAccessToken
+            );
+            const targetUrl = savedLocal || convertToDirectImageUrl(raw);
+            if (targetUrl && targetUrl !== raw) {
+              db.run('UPDATE members SET photo_path = ?, updated_at = ? WHERE id = ?', [targetUrl, now, m.id]);
+              repairedCount++;
+            }
+          } catch (e) {
+            const direct = convertToDirectImageUrl(raw);
+            if (direct && direct !== raw) {
+              db.run('UPDATE members SET photo_path = ?, updated_at = ? WHERE id = ?', [direct, now, m.id]);
+              repairedCount++;
+            }
+          }
+        }
+      }
+
+      saveDb();
+
+      logAudit(
+        user.username,
+        'REPAIR_PHOTOS',
+        null,
+        null,
+        `إصلاح وتحديث روابط صور الأعضاء لعدد (${repairedCount}) عضو`
+      );
+
+      res.json({
+        success: true,
+        repairedCount,
+        totalChecked: members.length,
+        message: `تم فحص وتحديث صور (${repairedCount}) عضو بنجاح`,
+      });
+    } catch (err: any) {
+      console.error('Repair photos error:', err);
+      res.status(500).json({ error: err.message || 'فشل تحديث صور الأعضاء' });
     }
   });
 
@@ -5728,7 +6403,7 @@ async function startServer() {
       const lower = s.toLowerCase();
       return lower.includes('tribe') || s.includes('عشائر') || s.includes('العشيرة') || s.includes('عشيرة');
     });
-    const tribesRaw: any[] = tribesSheetName ? XLSX.utils.sheet_to_json(wb.Sheets[tribesSheetName], { defval: '' }) : [];
+    const tribesRaw: any[] = tribesSheetName ? extractSheetRowsWithHyperlinks(wb.Sheets[tribesSheetName]) : [];
 
     // Collect members from all non-tribes and non-audit sheets
     let membersRaw: any[] = [];
@@ -5738,7 +6413,7 @@ async function startServer() {
       if (lower.includes('audit') || sName.includes('سجل') || sName.includes('عمليات')) {
         continue;
       }
-      const rows: any[] = XLSX.utils.sheet_to_json(wb.Sheets[sName], { defval: '' });
+      const rows: any[] = extractSheetRowsWithHyperlinks(wb.Sheets[sName]);
       const isLeaderSheet = lower.includes('leader') || sName.includes('قادة') || sName.includes('القادة');
       for (const r of rows) {
         if (isLeaderSheet && !r._isLeaderSheet) {
@@ -5749,7 +6424,7 @@ async function startServer() {
     }
 
     if (membersRaw.length === 0 && sheetNames.length > 0) {
-      membersRaw = XLSX.utils.sheet_to_json(wb.Sheets[sheetNames[0]], { defval: '' });
+      membersRaw = extractSheetRowsWithHyperlinks(wb.Sheets[sheetNames[0]]);
     }
 
     // Helper to get field by Arabic or English key (trimmed & case-insensitive)
@@ -5838,12 +6513,16 @@ async function startServer() {
       }
       seenNationalIds.add(nationalId);
 
-      const memberCode = getVal(
+      const rawMemberCode = getVal(
         row,
-        'كود العضو', 'كود القائد', 'كود العضوة', 'كود', 'الكود', 'رقم القيد', 'member_code', 'Member Code', 'code', 'Code'
+        'كود العضو', 'كود العضوة', 'كود الطالبة', 'كود الطالب', 'كود القائد', 'كود المشترك', 'كود المشتركة',
+        'كود الكشافة', 'الكود الكشفي', 'كود العضوية', 'رقم العضوية', 'رقم القيد', 'الكود', 'كود',
+        'member_code', 'Member Code', 'MemberCode', 'memberCode', 'Member_Code', 'Code', 'code', 'CODE',
+        'Scout Code', 'scout_code', 'Member ID', 'member_id', 'MemberId', 'ID'
       );
+      const memberCode = normalizeMemberCodeFromImport(rawMemberCode);
       if (memberCode) {
-        seenMemberCodes.add(memberCode);
+        seenMemberCodes.add(memberCode.toUpperCase());
       }
 
       const rawBirthDate = getVal(row, 'تاريخ الميلاد', 'birth_date', 'Birth Date');
@@ -5948,9 +6627,12 @@ async function startServer() {
           );
           if (downloadedPath) {
             m.photoPath = downloadedPath;
+          } else {
+            m.photoPath = convertToDirectImageUrl(m.photoPath) || m.photoPath;
           }
         } catch (photoErr: any) {
           console.warn(`[RESTORE] Could not download photo for member ${m.studentName}:`, photoErr?.message);
+          m.photoPath = convertToDirectImageUrl(m.photoPath) || m.photoPath;
         }
       }
     }
@@ -6018,19 +6700,20 @@ async function startServer() {
       }
 
       // 2. Insert Members
-      let maxSeq = 149;
+      let maxSeq = 0;
       const memberCodeToIdMap = new Map<string, number>();
 
+      // Pre-scan all explicit member codes to find maximum sequence number
       for (const m of validatedMembers) {
-        let code = m.memberCode;
-        if (!code) {
-          maxSeq++;
-          code = formatMemberCode(maxSeq);
-        } else {
-          const matchSC = code.match(/^sc0*(\d+)$/i);
-          const matchA = code.match(/^A(\d+)$/i);
-          const matchOldSC = code.match(/^SC-(\d+)$/i);
-          if (matchSC && matchSC[1]) {
+        if (m.memberCode) {
+          const matchA25 = m.memberCode.match(/^A250*(\d+)$/i);
+          const matchSC = m.memberCode.match(/^sc0*(\d+)$/i);
+          const matchA = m.memberCode.match(/^A(\d+)$/i);
+          const matchOldSC = m.memberCode.match(/^SC-(\d+)$/i);
+          if (matchA25 && matchA25[1]) {
+            const num = parseInt(matchA25[1], 10);
+            if (num > maxSeq) maxSeq = num;
+          } else if (matchSC && matchSC[1]) {
             const num = parseInt(matchSC[1], 10);
             if (num > maxSeq) maxSeq = num;
           } else if (matchA && matchA[1]) {
@@ -6041,6 +6724,19 @@ async function startServer() {
             if (num > maxSeq && num < 250000) maxSeq = num;
           }
         }
+      }
+
+      const assignedCodesInRestore = new Set<string>();
+
+      for (const m of validatedMembers) {
+        let code = m.memberCode;
+        if (!code) {
+          do {
+            maxSeq++;
+            code = formatMemberCode(maxSeq);
+          } while (assignedCodesInRestore.has(code.toUpperCase()) || seenMemberCodes.has(code.toUpperCase()));
+        }
+        assignedCodesInRestore.add(code.toUpperCase());
 
         const tribeId = m.tribeName ? tribeMap.get(m.tribeName) || null : null;
 
@@ -6187,6 +6883,14 @@ async function startServer() {
 
       const hasBackupExcel = fs.existsSync(BACKUP_EXCEL_FILE);
 
+      let totalPhotos = 0;
+      if (fs.existsSync(PHOTOS_DIR)) {
+        totalPhotos = fs.readdirSync(PHOTOS_DIR).filter((f) => !f.startsWith('.')).length;
+      }
+      const membersWithPhotos =
+        (queryOne(db, "SELECT COUNT(*) as count FROM members WHERE photo_path IS NOT NULL AND photo_path != ''")
+          ?.count as number) || 0;
+
       res.json({
         totalMembers: memCount,
         totalTribes: tribeCount,
@@ -6194,9 +6898,71 @@ async function startServer() {
         snapshotCount,
         snapshotDate,
         hasBackupExcel,
+        totalPhotos,
+        membersWithPhotos,
+        photosDir: PHOTOS_DIR,
+        dbPath: DB_PATH,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Open Photos folder on the local operating system (e.g. Windows File Explorer)
+  app.post('/api/backup/photos/open-folder', authenticate, async (req: Request, res: Response) => {
+    try {
+      if (!fs.existsSync(PHOTOS_DIR)) {
+        fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+      }
+      const platform = process.platform;
+      if (platform === 'win32') {
+        exec(`explorer.exe "${PHOTOS_DIR}"`);
+      } else if (platform === 'darwin') {
+        exec(`open "${PHOTOS_DIR}"`);
+      } else {
+        exec(`xdg-open "${PHOTOS_DIR}"`);
+      }
+      res.json({
+        success: true,
+        path: PHOTOS_DIR,
+        message: 'تم فتح المجلد في مستكشف الملفات (File Explorer)',
+      });
+    } catch (err: any) {
+      res.json({
+        success: false,
+        path: PHOTOS_DIR,
+        error: err.message || 'تعذر فتح مستكشف الملفات تلقائياً، يمكنك نسخ المسار يدوياً',
+      });
+    }
+  });
+
+  // Manually trigger permanent disk save & snapshot synchronization
+  app.post('/api/backup/persist-permanent', authenticate, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as SessionUser;
+      const db = await getDb();
+      saveDb();
+
+      const memCount = queryOne(db, 'SELECT COUNT(*) as count FROM members')?.count || 0;
+      const tribeCount = queryOne(db, 'SELECT COUNT(*) as count FROM tribes')?.count || 0;
+
+      logAudit(
+        user.username,
+        'BACKUP',
+        null,
+        null,
+        `تم تأمين حفظ دائم لقاعدة البيانات (${memCount} عضو، ${tribeCount} عشيرة) على القرص الصلب`
+      );
+
+      res.json({
+        success: true,
+        memberCount: memCount,
+        tribeCount: tribeCount,
+        message: `تم تأمين حفظ دائم تضم (${memCount}) عضو على القرص الصلب بنجاح!`,
+      });
+    } catch (err: any) {
+      console.error('Error in persist-permanent:', err);
+      res.status(500).json({ error: err.message || 'فشل تأمين الحفظ الدائم على القرص الصلب' });
     }
   });
 
@@ -6310,6 +7076,266 @@ async function startServer() {
     } catch (err: any) {
       console.error('Full system backup error:', err);
       res.status(500).json({ error: 'حدث خطأ أثناء إنشاء النسخة الاحتياطية الشاملة للنظام: ' + (err?.message || '') });
+    }
+  });
+
+  // --- Members Photos Backup Download (.zip) ---
+  app.get('/api/backup/photos/download', authenticate, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as SessionUser;
+      const db = await getDb();
+      saveDb();
+
+      const memberIdsParam = req.query.memberIds as string | undefined;
+      let members: any[] = [];
+
+      if (memberIdsParam) {
+        const idList = memberIdsParam
+          .split(',')
+          .map((id) => parseInt(id.trim(), 10))
+          .filter((id) => !isNaN(id) && id > 0);
+
+        if (idList.length > 0) {
+          const placeholders = idList.map(() => '?').join(',');
+          members = queryAll(
+            db,
+            `SELECT m.id, m.member_code, m.student_name, m.national_id, m.photo_path, m.school_stage, t.name as tribe_name
+             FROM members m
+             LEFT JOIN tribes t ON m.tribe_id = t.id
+             WHERE m.id IN (${placeholders}) AND m.photo_path IS NOT NULL AND m.photo_path != ''`,
+            idList
+          );
+        }
+      } else {
+        members = queryAll(
+          db,
+          `SELECT m.id, m.member_code, m.student_name, m.national_id, m.photo_path, m.school_stage, t.name as tribe_name
+           FROM members m
+           LEFT JOIN tribes t ON m.tribe_id = t.id
+           WHERE m.photo_path IS NOT NULL AND m.photo_path != ''
+           ORDER BY m.id ASC`
+        );
+      }
+
+      if (!members || members.length === 0) {
+        let rawPhotoFiles: string[] = [];
+        if (fs.existsSync(PHOTOS_DIR)) {
+          rawPhotoFiles = fs.readdirSync(PHOTOS_DIR).filter((f) => !f.startsWith('.'));
+        }
+
+        if (rawPhotoFiles.length === 0) {
+          return res.status(404).json({ error: 'لا توجد أي صور مسجلة للأعضاء لتحميلها حالياً' });
+        }
+      }
+
+      const zip = new JSZip();
+      const namedFolder = zip.folder('صور_الاعضاء_بالاسماء');
+      const rawFolder = zip.folder('photos');
+      const manifestEntries: any[] = [];
+      const addedFiles = new Set<string>();
+
+      for (const m of members) {
+        const photoPath = m.photo_path ? m.photo_path.trim() : '';
+        if (!photoPath) continue;
+
+        let fullPath = '';
+        if (photoPath.startsWith('/data/photos/')) {
+          fullPath = path.join(PHOTOS_DIR, path.basename(photoPath));
+        } else if (photoPath.startsWith('/data/')) {
+          fullPath = path.join(path.dirname(DB_PATH), photoPath);
+        } else if (fs.existsSync(path.join(PHOTOS_DIR, path.basename(photoPath)))) {
+          fullPath = path.join(PHOTOS_DIR, path.basename(photoPath));
+        }
+
+        if (fullPath && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+          const fileData = fs.readFileSync(fullPath);
+          const ext = path.extname(fullPath).toLowerCase() || '.jpg';
+          const baseName = path.basename(fullPath);
+
+          const safeCode = (m.member_code || `A25${String(m.id).padStart(4, '0')}`).replace(/[/\\?%*:|"<>]/g, '_').trim();
+          const safeName = (m.student_name || 'عضو').replace(/[/\\?%*:|"<>]/g, '_').trim();
+          const cleanOrganizedName = `${safeCode}_${safeName}${ext}`;
+
+          namedFolder?.file(cleanOrganizedName, fileData);
+
+          if (!addedFiles.has(baseName)) {
+            rawFolder?.file(baseName, fileData);
+            addedFiles.add(baseName);
+          }
+
+          manifestEntries.push({
+            id: m.id,
+            member_code: m.member_code,
+            student_name: m.student_name,
+            national_id: m.national_id,
+            school_stage: m.school_stage,
+            tribe_name: m.tribe_name,
+            named_file: cleanOrganizedName,
+            original_filename: baseName,
+            photo_path: m.photo_path,
+          });
+        }
+      }
+
+      if (fs.existsSync(PHOTOS_DIR)) {
+        const allPhotoFiles = fs.readdirSync(PHOTOS_DIR).filter((f) => !f.startsWith('.'));
+        for (const file of allPhotoFiles) {
+          if (!addedFiles.has(file)) {
+            const p = path.join(PHOTOS_DIR, file);
+            if (fs.statSync(p).isFile()) {
+              rawFolder?.file(file, fs.readFileSync(p));
+              addedFiles.add(file);
+            }
+          }
+        }
+      }
+
+      const manifest = {
+        exportedAt: new Date().toISOString(),
+        exportedBy: user?.username || 'admin',
+        totalMembersExported: manifestEntries.length,
+        totalFilesSaved: addedFiles.size,
+        description: 'نسخة احتياطية خاصة بصور أعضاء الكشافة',
+        members: manifestEntries,
+      };
+
+      zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10);
+      const zipFileName = `scout_members_photos_${dateStr}.zip`;
+
+      const zipBuffer = await zip.generateAsync({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+      });
+
+      logAudit(user.username, 'PHOTOS_BACKUP' as any, null, null, `إنشاء وتحميل نسخة احتياطية لصور الأعضاء: ${zipFileName} (${manifestEntries.length} صورة)`);
+
+      res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
+      res.setHeader('Content-Type', 'application/zip');
+      res.send(zipBuffer);
+    } catch (err: any) {
+      console.error('Photos backup error:', err);
+      res.status(500).json({ error: 'حدث خطأ أثناء إنشاء نسخة صور الأعضاء: ' + (err?.message || '') });
+    }
+  });
+
+  // --- Members Photos Backup Restore (.zip) ---
+  app.post('/api/backup/photos/restore', authenticate, requireAdmin, upload.single('photosZip'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as SessionUser;
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ error: 'يرجى اختيار ملف الأرشيف المضغوط (.zip) الحاوي على صور الأعضاء' });
+      }
+
+      const zip = await JSZip.loadAsync(req.file.buffer);
+      const db = await getDb();
+
+      if (!fs.existsSync(PHOTOS_DIR)) {
+        fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+      }
+
+      let restoredPhotosCount = 0;
+      let matchedMembersCount = 0;
+
+      let manifest: any = null;
+      const manifestFile = zip.file('manifest.json');
+      if (manifestFile) {
+        try {
+          const manifestContent = await manifestFile.async('string');
+          manifest = JSON.parse(manifestContent);
+        } catch (e) {
+          console.warn('Could not parse manifest.json from photos zip', e);
+        }
+      }
+
+      for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir) continue;
+        const lower = relativePath.toLowerCase();
+        if (
+          lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png') ||
+          lower.endsWith('.webp') ||
+          lower.endsWith('.gif') ||
+          lower.endsWith('.bmp')
+        ) {
+          const fileData = await zipEntry.async('nodebuffer');
+          const fileName = path.basename(relativePath);
+          const destPath = path.join(PHOTOS_DIR, fileName);
+          fs.writeFileSync(destPath, fileData);
+          restoredPhotosCount++;
+        }
+      }
+
+      const members = queryAll(db, 'SELECT id, member_code, national_id, student_name, photo_path FROM members');
+      const photoFiles = fs.readdirSync(PHOTOS_DIR).filter((f) => !f.startsWith('.'));
+      const now = new Date().toISOString();
+
+      for (const mem of members) {
+        if (mem.photo_path) {
+          const base = path.basename(mem.photo_path);
+          if (fs.existsSync(path.join(PHOTOS_DIR, base))) {
+            continue;
+          }
+        }
+
+        let matchedFileName: string | null = null;
+        if (manifest && Array.isArray(manifest.members)) {
+          const found = manifest.members.find(
+            (item: any) =>
+              (item.id && item.id === mem.id) ||
+              (item.member_code && item.member_code.toUpperCase() === (mem.member_code || '').toUpperCase()) ||
+              (item.national_id && item.national_id === mem.national_id)
+          );
+          if (found && found.original_filename && fs.existsSync(path.join(PHOTOS_DIR, found.original_filename))) {
+            matchedFileName = found.original_filename;
+          } else if (found && found.named_file && fs.existsSync(path.join(PHOTOS_DIR, found.named_file))) {
+            matchedFileName = found.named_file;
+          }
+        }
+
+        if (!matchedFileName) {
+          const nId = mem.national_id ? String(mem.national_id).trim() : '';
+          const mCode = mem.member_code ? String(mem.member_code).trim().toLowerCase() : '';
+          const mIdStr = String(mem.id);
+
+          const found = photoFiles.find((f) => {
+            const fLow = f.toLowerCase();
+            return (
+              (nId && fLow.includes(nId)) ||
+              (mCode && fLow.includes(mCode)) ||
+              (mIdStr && (fLow.startsWith(`sc-${mIdStr}_`) || fLow.startsWith(`a25${mIdStr.padStart(4, '0')}`)))
+            );
+          });
+
+          if (found) {
+            matchedFileName = found;
+          }
+        }
+
+        if (matchedFileName) {
+          const newPath = `/data/photos/${matchedFileName}`;
+          db.run('UPDATE members SET photo_path = ?, updated_at = ? WHERE id = ?', [newPath, now, mem.id]);
+          matchedMembersCount++;
+        }
+      }
+
+      saveDb();
+
+      logAudit(user.username, 'PHOTOS_RESTORE' as any, null, null, `استعادة صور الأعضاء من أرشيف: استخراج ${restoredPhotosCount} صورة، وربط ${matchedMembersCount} عضو`);
+
+      res.json({
+        success: true,
+        message: `تم استعادة وتثبيت (${restoredPhotosCount}) صورة بنجاح على النظام${matchedMembersCount > 0 ? `، وربط (${matchedMembersCount}) عضو بصورهم` : ''}`,
+        photosCount: restoredPhotosCount,
+        matchedMembers: matchedMembersCount,
+      });
+    } catch (err: any) {
+      console.error('Photos restore error:', err);
+      res.status(500).json({ error: 'حدث خطأ أثناء استعادة صور الأعضاء: ' + (err?.message || '') });
     }
   });
 
@@ -8013,6 +9039,19 @@ async function startServer() {
       server: {
         middlewareMode: true,
         hmr: isHmrDisabled ? false : { server: httpServer },
+        watch: isHmrDisabled
+          ? null
+          : {
+              ignored: [
+                '**/data/**',
+                '**/dist/**',
+                '**/*.db',
+                '**/*.db*',
+                '**/*.sqlite*',
+                '**/scout.db*',
+                '**/photos/**',
+              ],
+            },
       },
       appType: 'spa',
     });
@@ -8037,6 +9076,8 @@ async function startServer() {
 
   const server = httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Scout Management System running on http://localhost:${PORT}`);
+    console.log(`[STORAGE] Database file path: ${DB_PATH}`);
+    console.log(`[STORAGE] Member photos physical folder: ${PHOTOS_DIR}`);
   });
 
   const onShutdown = () => {

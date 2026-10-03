@@ -28,6 +28,7 @@ import { WalletHistoryModal } from './components/WalletHistoryModal';
 import { PayFromWalletModal } from './components/PayFromWalletModal';
 import { WalletAdjustModal } from './components/WalletAdjustModal';
 import { SubscriptionRolloverModal } from './components/SubscriptionRolloverModal';
+import { getPhotoUrl } from '../../utils/photo';
 
 interface WalletsViewProps {
   currentUser?: {
@@ -466,8 +467,9 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ currentUser, onSelectM
                           <div className="flex items-center gap-3">
                             {m.photo_path ? (
                               <img
-                                src={m.photo_path}
+                                src={getPhotoUrl(m.photo_path)}
                                 alt={m.student_name}
+                                referrerPolicy="no-referrer"
                                 className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
                               />
                             ) : (

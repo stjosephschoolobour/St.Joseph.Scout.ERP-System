@@ -724,7 +724,7 @@ function initializeSchema(database: Database): void {
   `);
 
   database.run(`
-    INSERT OR IGNORE INTO system_counters (key, value) VALUES ('member_seq', 149);
+    INSERT OR IGNORE INTO system_counters (key, value) VALUES ('member_seq', 0);
   `);
 
   // Seed default admin user: "admin" / "jan123"
@@ -787,7 +787,7 @@ function runMigrations(database: Database): void {
     );
   `);
   database.run(`
-    INSERT OR IGNORE INTO system_counters (key, value) VALUES ('member_seq', 149);
+    INSERT OR IGNORE INTO system_counters (key, value) VALUES ('member_seq', 0);
   `);
 
   // 3. Inspect members table columns
@@ -972,59 +972,78 @@ function runMigrations(database: Database): void {
     `);
   } catch (e) {}
 
-  // 4. Migrate member codes to sc000150 format
-  // Check if any member already has the sc000150 pattern
-  const scCheckStmt = database.prepare("SELECT member_code FROM members WHERE member_code IS NOT NULL");
-  let hasScCode = false;
-  while (scCheckStmt.step()) {
-    const row = scCheckStmt.getAsObject();
-    const mCode = String(row.member_code || '').trim();
-    if (/^sc0*(\d+)$/i.test(mCode)) {
-      hasScCode = true;
-      break;
+  // 4. Migrate member codes to A25xxxx format (e.g. sc000151 -> A250151)
+  const allMembersStmt = database.prepare("SELECT id, member_code FROM members ORDER BY id ASC");
+  const membersToMigrate: { id: number; currentCode: string }[] = [];
+  while (allMembersStmt.step()) {
+    const row = allMembersStmt.getAsObject();
+    const id = row.id as number;
+    const currentCode = String(row.member_code || '').trim();
+    membersToMigrate.push({ id, currentCode });
+  }
+  allMembersStmt.free();
+
+  let maxSeq = 0;
+  const assignedCodes = new Set<string>();
+
+  // Pass 1: Identify existing valid A25xxxx codes
+  for (const m of membersToMigrate) {
+    const matchA25 = m.currentCode.match(/^A250*(\d+)$/i);
+    if (matchA25) {
+      const num = parseInt(matchA25[1], 10);
+      if (num > maxSeq && num < 250000) maxSeq = num;
+      assignedCodes.add(m.currentCode.toUpperCase());
     }
   }
-  scCheckStmt.free();
 
-  if (!hasScCode) {
-    // If no member has the sc000150 format yet, sequentially update all existing members starting from sc000150
-    const allMembersStmt = database.prepare("SELECT id FROM members ORDER BY id ASC");
-    const memberIds: number[] = [];
-    while (allMembersStmt.step()) {
-      const row = allMembersStmt.getAsObject();
-      memberIds.push(row.id as number);
-    }
-    allMembersStmt.free();
-
-    let seq = 149;
-    for (const memId of memberIds) {
-      seq++;
-      const code = formatMemberCode(seq);
-      const updateStmt = database.prepare("UPDATE members SET member_code = ? WHERE id = ?");
-      updateStmt.run([code, memId]);
-      updateStmt.free();
+  // Pass 2: Migrate sc00xxxx or unassigned/non-A25 codes to A25xxxx
+  for (const m of membersToMigrate) {
+    if (/^A25\d{4,}$/i.test(m.currentCode)) {
+      continue; // already in A25xxxx format
     }
 
-    const updateCounterStmt = database.prepare("UPDATE system_counters SET value = ? WHERE key = 'member_seq'");
-    updateCounterStmt.run([seq]);
-    updateCounterStmt.free();
-  } else {
-    // Backfill any unassigned members
-    const membersWithoutCodeStmt = database.prepare("SELECT id FROM members WHERE member_code IS NULL OR member_code = '' ORDER BY id ASC");
-    const unassignedIds: number[] = [];
-    while (membersWithoutCodeStmt.step()) {
-      const row = membersWithoutCodeStmt.getAsObject();
-      unassignedIds.push(row.id as number);
-    }
-    membersWithoutCodeStmt.free();
+    let targetSeq: number | null = null;
+    const matchSc = m.currentCode.match(/^sc0*(\d+)$/i);
+    const matchOldA = m.currentCode.match(/^A0*(\d+)$/i);
+    const matchSct = m.currentCode.match(/^SCT-?0*(\d+)$/i);
 
-    for (const memId of unassignedIds) {
-      const code = generateNextMemberCode(database);
-      const updateStmt = database.prepare("UPDATE members SET member_code = ? WHERE id = ?");
-      updateStmt.run([code, memId]);
-      updateStmt.free();
+    if (matchSc) {
+      targetSeq = parseInt(matchSc[1], 10);
+    } else if (matchOldA) {
+      targetSeq = parseInt(matchOldA[1], 10);
+    } else if (matchSct) {
+      targetSeq = parseInt(matchSct[1], 10);
     }
+
+    let newCode = '';
+    if (targetSeq !== null && targetSeq >= 1) {
+      newCode = formatMemberCode(targetSeq);
+      if (targetSeq > maxSeq) maxSeq = targetSeq;
+    }
+
+    // If newCode is empty or already assigned, generate next sequential code
+    if (!newCode || assignedCodes.has(newCode.toUpperCase())) {
+      do {
+        maxSeq++;
+        newCode = formatMemberCode(maxSeq);
+      } while (assignedCodes.has(newCode.toUpperCase()));
+    }
+
+    assignedCodes.add(newCode.toUpperCase());
+    const updateStmt = database.prepare("UPDATE members SET member_code = ? WHERE id = ?");
+    updateStmt.run([newCode, m.id]);
+    updateStmt.free();
   }
+
+  // If no members at all, keep maxSeq = 0
+  if (membersToMigrate.length === 0) {
+    maxSeq = 0;
+  }
+
+  // Update system counter
+  const updateCounterStmt = database.prepare("UPDATE system_counters SET value = ? WHERE key = 'member_seq'");
+  updateCounterStmt.run([maxSeq]);
+  updateCounterStmt.free();
 
   // 5. Audit log table migration if needed (ensure no check constraint blocking new actions)
   // Check audit_log sql definition
@@ -1650,37 +1669,62 @@ function runMigrations(database: Database): void {
   }
 }
 
-// Format member code: 150 -> "sc000150"
+// Format member code: 151 -> "A250151" (format: A25 + 4 digits)
 export function formatMemberCode(seq: number): string {
-  return `sc${String(seq).padStart(6, '0')}`;
+  return `A25${String(seq).padStart(4, '0')}`;
 }
 
-// Generate next unique Member Code starting from sc000150
+// Generate next unique Member Code starting from A250001
 export function generateNextMemberCode(database: Database): string {
-  let seq = 149; // so that first generated code is sc000150
-  const stmt = database.prepare("SELECT value FROM system_counters WHERE key = 'member_seq'");
-  if (stmt.step()) {
-    const val = (stmt.getAsObject().value as number) || 0;
-    if (val >= 149 && val < 250000) {
-      seq = val;
-    }
+  let seq = 0; // so that first generated code is A250001 (seq 1)
+  
+  const countStmt = database.prepare("SELECT COUNT(*) as count FROM members");
+  let memberCount = 0;
+  if (countStmt.step()) {
+    memberCount = (countStmt.getAsObject().count as number) || 0;
   }
-  stmt.free();
+  countStmt.free();
 
-  // Scan existing member codes to ensure we stay strictly above any existing scXXXXXX code
-  const memStmt = database.prepare("SELECT member_code FROM members WHERE member_code IS NOT NULL");
-  while (memStmt.step()) {
-    const row = memStmt.getAsObject();
-    const mCode = String(row.member_code || '').trim();
-    const match = mCode.match(/^sc0*(\d+)$/i);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      if (num >= 150 && num > seq) {
-        seq = num;
+  if (memberCount > 0) {
+    const stmt = database.prepare("SELECT value FROM system_counters WHERE key = 'member_seq'");
+    if (stmt.step()) {
+      const val = (stmt.getAsObject().value as number) || 0;
+      if (val >= 0 && val < 250000) {
+        seq = val;
       }
     }
+    stmt.free();
+
+    // Scan existing member codes to ensure we stay strictly above any existing A25xxxx or scXXXXXX code
+    const memStmt = database.prepare("SELECT member_code FROM members WHERE member_code IS NOT NULL");
+    while (memStmt.step()) {
+      const row = memStmt.getAsObject();
+      const mCode = String(row.member_code || '').trim();
+      const matchA25 = mCode.match(/^A250*(\d+)$/i);
+      const matchSC = mCode.match(/^sc0*(\d+)$/i);
+      const matchA = mCode.match(/^A0*(\d+)$/i);
+      if (matchA25) {
+        const num = parseInt(matchA25[1], 10);
+        if (num >= 1 && num > seq) {
+          seq = num;
+        }
+      } else if (matchSC) {
+        const num = parseInt(matchSC[1], 10);
+        if (num >= 1 && num > seq) {
+          seq = num;
+        }
+      } else if (matchA) {
+        const num = parseInt(matchA[1], 10);
+        if (num >= 1 && num > seq && num < 250000) {
+          seq = num;
+        }
+      }
+    }
+    memStmt.free();
+  } else {
+    // If no members in database, reset sequence to 0 so the first code is A250001
+    seq = 0;
   }
-  memStmt.free();
 
   let code = '';
   let isUnique = false;
@@ -1769,7 +1813,9 @@ export type AuditActionType =
   | 'WALLET_SUBSCRIPTION_ROLLOVER'
   | 'WALLET_SUBSCRIPTION_REFUND'
   | 'FULL_SYSTEM_BACKUP'
-  | 'FULL_SYSTEM_RESTORE';
+  | 'FULL_SYSTEM_RESTORE'
+  | 'UPDATE_GRADES'
+  | 'REPAIR_PHOTOS';
 
 export function logAudit(
   user: string,

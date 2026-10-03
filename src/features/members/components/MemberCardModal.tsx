@@ -13,6 +13,7 @@ import {
   Award,
   Plus,
   Mail,
+  X,
 } from 'lucide-react';
 import { Member } from '../types';
 import { calculateAge } from '../../../utils/validators';
@@ -132,10 +133,66 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-        <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-6 animate-scale-in text-right">
-          {/* Printable Card Area */}
-          <div id="scout_member_card" className="p-7 bg-white dark:bg-slate-900 relative">
+      <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+        <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-auto animate-scale-in flex flex-col max-h-[92vh] text-right">
+          {/* Header (Sticky at top of modal) */}
+          <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 shrink-0 sticky top-0 z-10 no-print">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center border border-emerald-400/30 text-white shrink-0">
+                <IdCard className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-white">بطاقة العضو التفصيلية</h2>
+                  <span
+                    className={`inline-block px-2.5 py-0.5 rounded-lg text-[11px] font-bold tracking-wide ${
+                      member.member_type === 'قائد'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    }`}
+                  >
+                    {member.member_type}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {member.student_name} • {scoutGroupName}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white cursor-pointer"
+              title="إغلاق"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Member Code Status Bar */}
+          <div className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 px-6 py-2.5 flex items-center justify-between text-xs shrink-0 no-print">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-700 dark:text-slate-300">كود العضوية (Member Code):</span>
+              <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-700">
+                {member.member_code || `A25${String(member.id).padStart(4, '0')}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
+              {member.tribe_name && (
+                <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
+                  <Tent className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300">{member.tribe_name}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-1">
+                <span>الصف:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{member.school_stage || 'غير محدد'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Scrollable Printable Card Area */}
+          <div className="overflow-y-auto flex-1 min-h-0 bg-white dark:bg-slate-900">
+            <div id="scout_member_card" className="p-6 sm:p-7 relative space-y-6">
             {/* Card Top Banner */}
             <div className="flex items-center justify-between pb-5 border-b-2 border-slate-900 dark:border-slate-700">
               <div className="flex items-center gap-3.5">
@@ -171,7 +228,7 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
                   {member.member_type}
                 </span>
                 <p className="text-xs text-slate-700 dark:text-slate-300 font-mono font-bold mt-1 dir-ltr text-right">
-                  {member.member_code || `sc${String(member.id).padStart(6, '0')}`}
+                  {member.member_code || `A25${String(member.id).padStart(4, '0')}`}
                 </p>
               </div>
             </div>
@@ -196,7 +253,7 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                    {member.member_code || `sc${String(member.id).padStart(6, '0')}`}
+                    {member.member_code || `A25${String(member.id).padStart(4, '0')}`}
                   </span>
                   {member.tribe_name && (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800 flex items-center gap-1">
@@ -533,17 +590,19 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons (no-print) */}
-          <div className="bg-slate-100 dark:bg-slate-800 px-6 py-4 flex items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-700 no-print">
-            <div className="flex items-center gap-2">
+          {/* Action Buttons: تعديل, كارنيه CR80, طباعة, إغلاق (Sticky at bottom of modal) */}
+          <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0 no-print">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 id="btn_card_edit"
+                type="button"
                 onClick={() => {
                   onClose();
                   onEdit(member);
                 }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Edit className="w-4 h-4" />
                 تعديل
@@ -551,8 +610,9 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
 
               <button
                 id="btn_card_id_modal"
+                type="button"
                 onClick={() => setIsIdCardModalOpen(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                 title="معاينة الوجه الأمامي والخلفي للكارنيه وطباعته ومشاركته"
               >
                 <IdCard className="w-4 h-4" />
@@ -561,8 +621,9 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
 
               <button
                 id="btn_card_print"
+                type="button"
                 onClick={handlePrint}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 طباعة الملف
@@ -571,8 +632,9 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
 
             <button
               id="btn_card_close"
+              type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-xl text-xs border border-slate-300 dark:border-slate-600 transition cursor-pointer"
+              className="px-5 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-xl text-xs border border-slate-200 dark:border-slate-600 transition cursor-pointer"
             >
               إغلاق
             </button>
@@ -603,7 +665,7 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
           member={{
             id: member.id,
             student_name: member.student_name,
-            member_code: member.member_code || `sc${String(member.id).padStart(6, '0')}`,
+            member_code: member.member_code || `A25${String(member.id).padStart(4, '0')}`,
             member_type: member.member_type,
             balance: walletBalance ?? 0,
             photo_path: member.photo_path,

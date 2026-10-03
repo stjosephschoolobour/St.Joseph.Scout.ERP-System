@@ -14,13 +14,18 @@ import {
   Info,
   RefreshCw,
   Image,
+  Camera,
   Package,
   Archive,
   Layers,
   Sparkles,
+  Save,
+  FolderOpen,
+  Copy,
 } from 'lucide-react';
 import { backupService } from '../services/backupService';
 import { User } from '../../auth/types';
+import { BackupStatusResponse } from '../types';
 
 interface BackupRestoreViewProps {
   user: User;
@@ -50,19 +55,19 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [showExcelConfirm, setShowExcelConfirm] = useState(false);
 
+  // Photos Backup State
+  const [photosZipFile, setPhotosZipFile] = useState<File | null>(null);
+  const [showPhotosConfirm, setShowPhotosConfirm] = useState(false);
+  const [restoringPhotos, setRestoringPhotos] = useState(false);
+
   // Persistent Backup Status
-  const [backupStatus, setBackupStatus] = useState<{
-    totalMembers: number;
-    totalTribes: number;
-    hasSnapshot: boolean;
-    snapshotCount: number;
-    snapshotDate: string | null;
-    hasBackupExcel: boolean;
-  } | null>(null);
-  const [reapplying, setReapplying] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
+  const [persistingPermanent, setPersistingPermanent] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [normalizingGrades, setNormalizingGrades] = useState(false);
+  const [repairingPhotos, setRepairingPhotos] = useState(false);
 
   const isAdmin = user.role === 'ADMIN';
 
@@ -77,21 +82,46 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
     loadStatus();
   }, []);
 
-  const handleReapplyLastBackup = async () => {
-    if (!isAdmin) return;
-    setReapplying(true);
+  const handleNormalizeGrades = async () => {
+    setNormalizingGrades(true);
     setError(null);
     try {
-      const res = await backupService.reapplyLastBackup();
-      onSuccess(res.message || 'تمت إعادة تطبيق النسخة المحفوظة بنجاح');
+      const res = await backupService.normalizeAllGrades();
+      onSuccess(res.message);
       loadStatus();
-      setTimeout(() => {
-        window.location.reload();
-      }, 1200);
     } catch (err: any) {
-      setError(err.message || 'تعذرت استعادة النسخة المحفوظة');
+      setError(err.message || 'فشل توحيد الصفوف الدراسية');
     } finally {
-      setReapplying(false);
+      setNormalizingGrades(false);
+    }
+  };
+
+  const handleRepairPhotos = async () => {
+    setRepairingPhotos(true);
+    setError(null);
+    try {
+      const res = await backupService.repairMemberPhotos();
+      onSuccess(res.message);
+      loadStatus();
+    } catch (err: any) {
+      setError(err.message || 'فشل فحص وإصلاح صور الأعضاء');
+    } finally {
+      setRepairingPhotos(false);
+    }
+  };
+
+  const handlePersistPermanent = async () => {
+    if (!isAdmin) return;
+    setPersistingPermanent(true);
+    setError(null);
+    try {
+      const res = await backupService.persistPermanent();
+      onSuccess(res.message || 'تم تأمين حفظ دائم لقاعدة البيانات على القرص الصلب بنجاح');
+      loadStatus();
+    } catch (err: any) {
+      setError(err.message || 'فشل تأمين الحفظ الدائم على القرص الصلب');
+    } finally {
+      setPersistingPermanent(false);
     }
   };
 
@@ -119,13 +149,13 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
     onSuccess('تم تنزيل معلومات الأعضاء في ملف CSV بنجاح');
   };
 
-  // 3. Batch Members Import (CSV / Excel)
+  // 3. Batch Members Import (CSV / Excel / ZIP)
   const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       const lower = file.name.toLowerCase();
-      if (!lower.endsWith('.csv') && !lower.endsWith('.xlsx') && !lower.endsWith('.xls')) {
-        setError('يرجى اختيار ملف بصيغة CSV أو Excel (.xlsx)');
+      if (!lower.endsWith('.csv') && !lower.endsWith('.xlsx') && !lower.endsWith('.xls') && !lower.endsWith('.zip')) {
+        setError('يرجى اختيار ملف بصيغة CSV أو Excel (.xlsx) أو ملف ZIP مضغوط');
         setImportFile(null);
         return;
       }
@@ -167,6 +197,51 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
     link.click();
     document.body.removeChild(link);
     onSuccess('بدأ تجهيز وتحميل النسخة الاحتياطية الشاملة للنظام (قاعدة البيانات + صور الأعضاء وشعار المجموعة)');
+  };
+
+  // Photos Backup Download
+  const handleDownloadPhotosBackup = () => {
+    const url = backupService.getPhotosBackupDownloadUrl();
+    const link = document.createElement('a');
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    onSuccess('بدأ تحميل أرشيف النسخة الاحتياطية لصور الأعضاء (ZIP)');
+  };
+
+  // Photos Backup File Select
+  const handlePhotosFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const lower = file.name.toLowerCase();
+      if (!lower.endsWith('.zip')) {
+        setError('يرجى اختيار ملف أرشيف مضغوط لصور الأعضاء بصيغة (.zip)');
+        setPhotosZipFile(null);
+        return;
+      }
+      setPhotosZipFile(file);
+      setError(null);
+    }
+  };
+
+  // Photos Restore Execute
+  const handleExecutePhotosRestore = async () => {
+    if (!photosZipFile || !isAdmin) return;
+    setRestoringPhotos(true);
+    setError(null);
+
+    try {
+      const res = await backupService.restorePhotosBackup(photosZipFile);
+      onSuccess(res.message || 'تم استعادة وتثبيت صور الأعضاء بنجاح');
+      setShowPhotosConfirm(false);
+      setPhotosZipFile(null);
+      loadStatus();
+    } catch (err: any) {
+      setError(err.message || 'فشلت استعادة وتثبيت صور الأعضاء');
+    } finally {
+      setRestoringPhotos(false);
+    }
   };
 
   // SQLite Download
@@ -447,6 +522,171 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
       </div>
 
       {/* ============================================================ */}
+      {/* SECTION: MEMBERS PHOTOS BACKUP (.ZIP)                       */}
+      {/* ============================================================ */}
+      <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 rounded-2xl p-6 border-2 border-indigo-600/60 shadow-xl space-y-5 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-800/60 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <Camera className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-white">نسخة احتياطية لصور الأعضاء (ZIP Archive)</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                  أرشيف مستقل للصور
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                تنزيل أو استعادة كافة صور أعضاء الكشافة بملف مضغوط منظم حسب أسماء وأكواد الأعضاء مع فهرس الربط.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 rounded-xl bg-slate-800/80 border border-indigo-500/30 text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
+              <Image className="w-3.5 h-3.5 text-indigo-400" />
+              <span>إجمالي الصور بالنظام: <strong className="text-white">{backupStatus?.totalPhotos ?? 0}</strong></span>
+            </div>
+            <div className="px-3 py-1.5 rounded-xl bg-slate-800/80 border border-emerald-500/30 text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
+              <span>أعضاء بصور: <strong className="text-white">{backupStatus?.membersWithPhotos ?? 0}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Physical Path Information Bar */}
+        {backupStatus?.photosDir && (
+          <div className="mb-4 p-3 bg-slate-800/90 border border-slate-700/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-slate-300 overflow-hidden">
+              <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
+              <div className="truncate">
+                <span className="font-bold text-white ml-1">مسار مجلد الصور الفعلي على جهازك:</span>
+                <span className="font-mono text-emerald-400 select-all text-[11px] bg-slate-900/80 px-2 py-0.5 rounded border border-slate-700/60 inline-block mt-1 sm:mt-0">
+                  {backupStatus.photosDir}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(backupStatus.photosDir || '');
+                  onSuccess('تم نسخ مسار مجلد الصور إلى الحافظة بنجاح');
+                }}
+                className="py-1.5 px-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="نسخ المسار لفتحه في مستكشف الملفات"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>نسخ المسار</span>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await backupService.openPhotosFolder();
+                  if (res.success) {
+                    onSuccess(res.message || 'تم فتح المجلد في مستكشف الملفات');
+                  } else {
+                    navigator.clipboard.writeText(backupStatus.photosDir || '');
+                    onSuccess('تم نسخ المسار إلى الحافظة، يمكنك لصقه في مستكشف ملفات Windows');
+                  }
+                }}
+                className="py-1.5 px-3 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="فتح المجلد مباشرة في مستكشف الملفات Windows Explorer"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>فتح المجلد على الجهاز</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Photos Backup Action Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card 1: Download Photos Backup ZIP */}
+          <div className="bg-slate-800/80 rounded-xl p-5 border border-slate-700/80 flex flex-col justify-between hover:border-indigo-500/50 transition">
+            <div className="space-y-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+                <Download className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">تحميل نسخة احتياطية لصور الأعضاء</h4>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  يقوم بإنشاء وتنزيل ملف مضغوط (<span className="font-mono text-indigo-300 font-bold">.zip</span>) يحتوي على:
+                </p>
+                <ul className="text-xs text-slate-300 mt-2 space-y-1.5 list-none">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>مجلد منظم بأسماء وأكواد الأعضاء (<span className="font-mono text-slate-200">صور_الاعضاء_بالاسماء/</span>).</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>مجلد ملفات الصور الأصلية (<span className="font-mono text-slate-200">photos/</span>).</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>فهرس الربط والمعلومات (<span className="font-mono text-slate-200">manifest.json</span>).</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <button
+              id="btn_download_photos_backup"
+              onClick={handleDownloadPhotosBackup}
+              className="mt-5 w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>تحميل نسخة احتياطية لصور الأعضاء (ZIP)</span>
+            </button>
+          </div>
+
+          {/* Card 2: Restore Photos Backup ZIP */}
+          <div className="bg-slate-800/80 rounded-xl p-5 border border-slate-700/80 flex flex-col justify-between hover:border-amber-500/50 transition">
+            <div className="space-y-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/20">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">استعادة وربط صور الأعضاء من ملف ZIP</h4>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  ارفع أرشيف صور الأعضاء المضغوط (<span className="font-mono text-amber-300 font-bold">.zip</span>) ليتم استخراج الصور وتثبيتها وربطها تلقائياً بملفات الأعضاء.
+                </p>
+              </div>
+
+              <div>
+                <input
+                  id="input_restore_photos_file"
+                  type="file"
+                  accept=".zip"
+                  disabled={!isAdmin}
+                  onChange={handlePhotosFileChange}
+                  className="w-full text-xs text-slate-400 disabled:opacity-50 file:mr-0 file:ml-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-700 file:text-slate-100 hover:file:bg-slate-600 cursor-pointer"
+                />
+              </div>
+
+              {photosZipFile && (
+                <div className="p-2.5 bg-slate-900/90 rounded-xl border border-slate-700 flex items-center gap-2 text-xs text-slate-200 font-mono">
+                  <FileCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">{photosZipFile.name} ({(photosZipFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              id="btn_open_photos_restore_confirm"
+              disabled={!photosZipFile || !isAdmin}
+              onClick={() => setShowPhotosConfirm(true)}
+              className="mt-5 w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              <span>استعادة وربط صور الأعضاء من الملف</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================ */}
       {/* SECTION 1: CSV DOWNLOAD SECTION (MATCHING SCREENSHOT 12.png) */}
       {/* ============================================================ */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
@@ -491,13 +731,27 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
             </h4>
           </div>
           <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
-            قم بتعبئة نموذج CSV المفرغ ببيانات الأعضاء ثم ارفعه هنا. سيقوم النظام بالتحقق التلقائي من الأرقام القومية، وإنشاء الأكواد التسلسلية، وإضافتهم فوراً دفعة واحدة.
+            قم بتعبئة نموذج البيانات ببيانات الأعضاء ثم ارفعه هنا. سيقوم النظام بالتحقق التلقائي من الأرقام القومية، وضبط الصف الدراسي بدقة، واسترداد وحفظ الصور، وإضافتهم فوراً دفعة واحدة.
           </p>
-          <div className="mb-3 p-2.5 bg-blue-50/80 border border-blue-100 rounded-lg text-[11px] text-blue-900 flex items-start gap-2">
-            <Image className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>دعم استرداد الصور تلقائياً:</strong> يحتوي النموذج على عامود <code>رابط الصورة</code>. يمكنك وضع روابط الصور المباشرة أو روابط مشاركة Google Drive وسيقوم النظام بتنزيلها وحفظها محلياً للأعضاء تلقائياً.
-            </p>
+          <div className="mb-3 p-2.5 bg-blue-50/80 border border-blue-100 rounded-lg text-[11px] text-blue-900 space-y-1">
+            <div className="flex items-start gap-2">
+              <Image className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong>دعم متقدم لاسترداد الصور والروابط:</strong> يدعم النظام قراءة الروابط المباشرة، الروابط التشعبية (Hyperlinks) في خلايا Excel، دوال <code>=HYPERLINK(...)</code>، وروابط مشاركة Google Drive أو ملف مضغوط ZIP يحتوي على ملف Excel ومجلد الصور.
+              </p>
+            </div>
+            <div className="flex items-start gap-2 text-slate-600">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong>التعرف الذكي على الصف الدراسي:</strong> يتم التعرف تلقائياً على كافة صيغ المراحل الدراسية باللغتين العربية والإنجليزية (مثل: الأول الإعدادي، 1 اعدادي، أولى ثانوي، prep 1، sec 2) وتوحيدها.
+              </p>
+            </div>
+            <div className="flex items-start gap-2 text-slate-700">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong>الالتزام التام بأكواد الأعضاء:</strong> يلتزم النظام بالأكواد الموجودة في ملف Excel أو CSV؛ وفي حال عدم تحديد كود في الملف يبدأ الترقيم التلقائي بدقة من <code>A250001</code> فصاعداً.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -505,7 +759,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
               <input
                 id="input_batch_import_file"
                 type="file"
-                accept=".csv,.xlsx,.xls"
+                accept=".csv,.xlsx,.xls,.zip"
                 onChange={handleImportFileChange}
                 className="w-full text-xs text-slate-600 file:mr-0 file:ml-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-slate-700 file:border file:border-slate-300 hover:file:bg-slate-100 cursor-pointer"
               />
@@ -520,6 +774,39 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
               <Upload className="w-4 h-4" />
               <span>{importLoading ? 'جاري الاستيراد والإضافة...' : 'رفع وإضافة الأعضاء دفعة واحدة'}</span>
             </button>
+          </div>
+
+          {/* Quick Maintenance / Repair Actions */}
+          <div className="mt-3 pt-3 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              أدوات صيانة وتصحيح بيانات الأعضاء المسجلين مسبقاً:
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                id="btn_normalize_all_grades"
+                disabled={normalizingGrades}
+                onClick={handleNormalizeGrades}
+                className="py-1 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                title="إعادة فحص وتوحيد الصف الدراسي لجميع الأعضاء الحاليين وفق المراحل القياسية"
+              >
+                <RefreshCw className={`w-3 h-3 text-emerald-600 ${normalizingGrades ? 'animate-spin' : ''}`} />
+                <span>{normalizingGrades ? 'جاري تصحيح الصفوف...' : 'تصحيح وتوحيد الصفوف الدراسية'}</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn_repair_photos"
+                disabled={repairingPhotos}
+                onClick={handleRepairPhotos}
+                className="py-1 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                title="إعادة فحص روابط Google Drive وروابط الصور وتحديث مسارات العرض"
+              >
+                <Image className={`w-3 h-3 text-blue-600 ${repairingPhotos ? 'animate-pulse' : ''}`} />
+                <span>{repairingPhotos ? 'جاري تحديث الصور...' : 'فحص وتحديث صور الأعضاء'}</span>
+              </button>
+            </div>
           </div>
 
           {importFile && (
@@ -575,7 +862,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
           )}
         </div>
 
-        {/* Persistence Status & Quick Reapply */}
+        {/* Persistence Status & Permanent Disk Save */}
         {backupStatus && (
           <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2.5">
@@ -592,16 +879,25 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
               </div>
             </div>
 
-            {(backupStatus.hasBackupExcel || backupStatus.hasSnapshot) && isAdmin && (
+            {isAdmin && (
               <button
                 type="button"
-                id="btn_reapply_last_backup"
-                disabled={reapplying}
-                onClick={handleReapplyLastBackup}
-                className="py-1.5 px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                id="btn_persist_permanent"
+                disabled={persistingPermanent}
+                onClick={handlePersistPermanent}
+                className="py-2 px-4 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-bold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                title="تأمين حفظ دائم لقاعدة البيانات على القرص الصلب فوراً"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${reapplying ? 'animate-spin' : ''}`} />
-                <span>{reapplying ? 'جاري الاستعادة...' : 'إعادة تطبيق أحدث نسخة محفوظة'}</span>
+                {persistingPermanent ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 text-emerald-200" />
+                )}
+                <span>
+                  {persistingPermanent
+                    ? 'جاري تأمين الحفظ...'
+                    : `تأمين حفظ دائم (${backupStatus.totalMembers} عضو) على القرص الصلب`}
+                </span>
               </button>
             )}
           </div>
@@ -804,6 +1100,49 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({ user, onSu
                 id="btn_cancel_full_system_restore"
                 disabled={loading}
                 onClick={() => { setShowFullSystemConfirm(false); setError(null); }}
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition text-xs cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: Photos ZIP */}
+      {showPhotosConfirm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 text-center animate-scale-in">
+            <div className="w-12 h-12 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Camera className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 mb-1.5">تأكيد استعادة صور الأعضاء</h3>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              هل أنت متأكد من استعادة وتثبيت صور الأعضاء من الملف{' '}
+              <span className="font-mono font-bold text-slate-900">{photosZipFile?.name}</span>؟
+              سيتم فك ضغط ملفات الصور في مجلد النظام وربطها تلقائياً بالأعضاء المطابقين في قاعدة البيانات.
+            </p>
+
+            {error && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold text-right flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                id="btn_confirm_photos_restore"
+                disabled={restoringPhotos}
+                onClick={handleExecutePhotosRestore}
+                className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 text-white font-bold rounded-xl transition text-xs shadow-xs cursor-pointer"
+              >
+                {restoringPhotos ? 'جاري الاستعادة...' : 'تأكيد الاستعادة'}
+              </button>
+              <button
+                id="btn_cancel_photos_restore"
+                disabled={restoringPhotos}
+                onClick={() => { setShowPhotosConfirm(false); setError(null); }}
                 className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition text-xs cursor-pointer"
               >
                 إلغاء

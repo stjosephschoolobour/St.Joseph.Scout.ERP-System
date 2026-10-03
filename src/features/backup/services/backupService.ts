@@ -3,7 +3,13 @@
  */
 
 import { httpClient } from '../../../core/http/httpClient';
-import { BatchImportResult, RestoreResult, FullSystemRestoreResult } from '../types';
+import {
+  BatchImportResult,
+  RestoreResult,
+  FullSystemRestoreResult,
+  PhotosRestoreResult,
+  BackupStatusResponse,
+} from '../types';
 
 export class BackupService {
   private static instance: BackupService;
@@ -40,6 +46,35 @@ export class BackupService {
   public getExcelBackupDownloadUrl(): string {
     const token = httpClient.getToken();
     return `/api/backup/excel/download?token=${encodeURIComponent(token || '')}`;
+  }
+
+  public getPhotosBackupDownloadUrl(memberIds?: number[]): string {
+    const token = httpClient.getToken();
+    let url = `/api/backup/photos/download?token=${encodeURIComponent(token || '')}`;
+    if (memberIds && memberIds.length > 0) {
+      url += `&memberIds=${encodeURIComponent(memberIds.join(','))}`;
+    }
+    return url;
+  }
+
+  public async restorePhotosBackup(file: File): Promise<PhotosRestoreResult> {
+    const token = httpClient.getToken();
+    const formData = new FormData();
+    formData.append('photosZip', file);
+
+    const response = await fetch('/api/backup/photos/restore', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'فشلت عملية استيراد صور الأعضاء');
+    }
+    return data;
   }
 
   public async batchImportMembers(file: File): Promise<BatchImportResult> {
@@ -122,14 +157,7 @@ export class BackupService {
     return data;
   }
 
-  public async getBackupStatus(): Promise<{
-    totalMembers: number;
-    totalTribes: number;
-    hasSnapshot: boolean;
-    snapshotCount: number;
-    snapshotDate: string | null;
-    hasBackupExcel: boolean;
-  }> {
+  public async getBackupStatus(): Promise<BackupStatusResponse> {
     const token = httpClient.getToken();
     const response = await fetch('/api/backup/status', {
       headers: {
@@ -157,6 +185,66 @@ export class BackupService {
       throw new Error(data.error || 'فشلت إعادة تطبيق النسخة السابقة');
     }
     return data;
+  }
+
+  public async persistPermanent(): Promise<{ success: boolean; memberCount: number; tribeCount: number; message: string }> {
+    const token = httpClient.getToken();
+    const response = await fetch('/api/backup/persist-permanent', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'فشل تأمين الحفظ الدائم على القرص الصلب');
+    }
+    return data;
+  }
+
+  public async normalizeAllGrades(): Promise<{ success: boolean; updatedCount: number; totalMembers: number; message: string }> {
+    const token = httpClient.getToken();
+    const response = await fetch('/api/members/normalize-all-grades', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'فشل توحيد وتصحيح الصفوف الدراسية');
+    }
+    return data;
+  }
+
+  public async repairMemberPhotos(): Promise<{ success: boolean; repairedCount: number; totalChecked: number; message: string }> {
+    const token = httpClient.getToken();
+    const response = await fetch('/api/members/repair-photos', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'فشل فحص وإصلاح صور الأعضاء');
+    }
+    return data;
+  }
+
+  public async openPhotosFolder(): Promise<{ success: boolean; path: string; message?: string }> {
+    const token = httpClient.getToken();
+    const response = await fetch('/api/backup/photos/open-folder', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.json().catch(() => ({ success: false, path: '' }));
   }
 }
 

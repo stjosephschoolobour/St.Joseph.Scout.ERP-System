@@ -12,6 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import { walletService } from '../services/walletService';
+import { getPhotoUrl } from '../../../utils/photo';
 
 interface TopUpModalProps {
   isOpen: boolean;
@@ -48,7 +49,7 @@ export const TopUpModal: React.FC<TopUpModalProps> = ({
   const member = memberProp || (memberId ? {
     id: memberId,
     student_name: memberName || '',
-    member_code: memberCode || `sc${String(memberId).padStart(6, '0')}`,
+    member_code: memberCode || `A25${String(memberId).padStart(4, '0')}`,
     member_type: memberType,
     balance: currentBalance ?? 0,
     photo_path: photoPath,
@@ -144,8 +145,9 @@ export const TopUpModal: React.FC<TopUpModalProps> = ({
             <div className="flex items-center gap-3">
               {member.photo_path ? (
                 <img
-                  src={member.photo_path}
+                  src={getPhotoUrl(member.photo_path)}
                   alt={member.student_name}
+                  referrerPolicy="no-referrer"
                   className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
                 />
               ) : (

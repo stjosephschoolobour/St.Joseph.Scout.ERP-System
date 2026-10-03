@@ -26,6 +26,7 @@ import {
   Users,
   CheckCircle2,
   Loader2,
+  Camera,
 } from 'lucide-react';
 import { Member, SchoolStage } from '../types';
 import { User } from '../../auth/types';
@@ -41,6 +42,7 @@ import { BulkTransferTribeModal } from './BulkTransferTribeModal';
 import { BulkAwardBadgeModal } from './BulkAwardBadgeModal';
 import { BulkExportIdCardsModal } from './BulkExportIdCardsModal';
 import { membersService } from '../services/membersService';
+import { backupService } from '../../backup/services/backupService';
 
 export interface MemberListViewProps {
   members: Member[];
@@ -270,7 +272,7 @@ export const MemberListView: React.FC<MemberListViewProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="ابحث بالاسم، كود العضوية (sc000150)، الرقم القومي، أو العشيرة..."
+              placeholder="ابحث بالاسم، كود العضوية (A250001)، الرقم القومي، أو العشيرة..."
               className="w-full pr-10 pl-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
             />
             {searchTerm && (
@@ -282,6 +284,19 @@ export const MemberListView: React.FC<MemberListViewProps> = ({
               </button>
             )}
           </div>
+
+          <button
+            id="btn_photos_backup_all"
+            onClick={() => {
+              const url = backupService.getPhotosBackupDownloadUrl();
+              window.open(url, '_blank');
+            }}
+            title="تحميل نسخة احتياطية لصور جميع الأعضاء بملف مضغوط ZIP"
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2 text-xs sm:text-sm shrink-0 cursor-pointer"
+          >
+            <Camera className="w-4 h-4 text-indigo-200" />
+            <span>نسخة احتياطية للصور</span>
+          </button>
 
           <button
             id="btn_list_add_member"
@@ -447,6 +462,21 @@ export const MemberListView: React.FC<MemberListViewProps> = ({
             >
               <FolderDown className="w-4 h-4 text-blue-200" />
               <span>تصدير وطباعة الكارنيهات</span>
+            </button>
+
+            {/* 1.5 Download Selected Photos */}
+            <button
+              id="btn_download_selected_photos"
+              onClick={() => {
+                if (selectedMemberIds.length === 0) return;
+                const url = backupService.getPhotosBackupDownloadUrl(selectedMemberIds);
+                window.open(url, '_blank');
+              }}
+              title="تحميل صور الأعضاء المحددين فقط كملف مضغوط (ZIP)"
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Camera className="w-4 h-4 text-indigo-200" />
+              <span>تحميل صور المحدد (ZIP)</span>
             </button>
 
             {/* 2. Transfer to Tribe */}
@@ -648,7 +678,7 @@ export const MemberListView: React.FC<MemberListViewProps> = ({
 
                       {/* Member Code */}
                       <td className="py-3 px-3.5 font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                        {m.member_code || `sc${String(m.id).padStart(6, '0')}`}
+                        {m.member_code || `A25${String(m.id).padStart(4, '0')}`}
                       </td>
 
                       {/* Name + Scout Badges Icons */}

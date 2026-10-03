@@ -25,3 +25,23 @@ export interface FullSystemRestoreResult {
     photos: number;
   };
 }
+
+export interface PhotosRestoreResult {
+  success: boolean;
+  message: string;
+  photosCount: number;
+  matchedMembers: number;
+}
+
+export interface BackupStatusResponse {
+  totalMembers: number;
+  totalTribes: number;
+  totalPhotos?: number;
+  membersWithPhotos?: number;
+  photosDir?: string;
+  dbPath?: string;
+  hasSnapshot: boolean;
+  snapshotCount: number;
+  snapshotDate: string | null;
+  hasBackupExcel: boolean;
+}

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Lock, User, AlertCircle, Moon, Sun } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ShieldCheck, Lock, User, AlertCircle, Moon, Sun, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { authService } from '../services/authService';
 import { User as UserType } from '../types';
 import { useTheme } from '../../../core/theme/ThemeContext';
@@ -11,11 +11,33 @@ interface LoginScreenProps {
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [failedCount, setFailedCount] = useState(0);
 
+  const usernameInputRef = useRef<HTMLInputElement>(null);
+  const userHasTypedRef = useRef(false);
+
   const { theme, toggleTheme } = useTheme();
+
+  // Ensure fields are completely empty upon mounting and prevent browser auto-injection
+  useEffect(() => {
+    setUsername('');
+    setPassword('');
+
+    // Allow typing after short delay so browser password manager does not auto-fill on paint
+    const timer = setTimeout(() => {
+      if (!userHasTypedRef.current) {
+        setUsername('');
+        setPassword('');
+      }
+      setCanEdit(true);
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,10 +60,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleExit = () => {
+  const handleClear = () => {
+    userHasTypedRef.current = false;
     setUsername('');
     setPassword('');
     setError(null);
+    if (usernameInputRef.current) {
+      usernameInputRef.current.focus();
+    }
   };
 
   return (
@@ -83,7 +109,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="p-6 sm:p-8 space-y-4"
+          autoComplete="off"
+          data-lpignore="true"
+        >
+          {/* Decoy inputs to intercept aggressive browser credential autofill */}
+          <div style={{ position: 'absolute', opacity: 0, height: 0, width: 0, overflow: 'hidden', zIndex: -1 }}>
+            <input type="text" name="prevent_autofill_user" tabIndex={-1} autoComplete="off" />
+            <input type="password" name="prevent_autofill_pwd" tabIndex={-1} autoComplete="new-password" />
+          </div>
+
           {error && (
             <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 flex items-start gap-2.5 text-xs">
               <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
@@ -108,14 +145,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <User className="w-4 h-4" />
               </div>
               <input
-                id="login_username"
+                ref={usernameInputRef}
+                id="login_scout_user"
+                name="scout_user_ident"
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                readOnly={!canEdit}
+                onFocus={() => setCanEdit(true)}
+                onChange={(e) => {
+                  userHasTypedRef.current = true;
+                  setUsername(e.target.value);
+                }}
                 placeholder="أدخل اسم المستخدم"
                 required
-                autoFocus
-                className="w-full pr-9 pl-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
+                className="no-autofill w-full pr-9 pl-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
               />
             </div>
           </div>
@@ -129,18 +178,45 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <Lock className="w-4 h-4" />
               </div>
               <input
-                id="login_password"
-                type="password"
+                id="login_scout_pass"
+                name="scout_pass_secret"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                readOnly={!canEdit}
+                onFocus={() => setCanEdit(true)}
+                onChange={(e) => {
+                  userHasTypedRef.current = true;
+                  setPassword(e.target.value);
+                }}
                 placeholder="أدخل كلمة المرور"
                 required
-                className="w-full pr-9 pl-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
+                className="no-autofill w-full pr-9 pl-9 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
               />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
-          <div className="pt-2 space-y-2.5">
+          {/* Security reassurance banner */}
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 py-1.5 px-3 rounded-xl border border-slate-200/70 dark:border-slate-800">
+            <ShieldAlert className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>تسجيل دخول آمن: تم حظر التعبئة التلقائية لحماية الحساب</span>
+          </div>
+
+          <div className="pt-1 space-y-2">
             <button
               id="login_submit_button"
               type="submit"
@@ -153,7 +229,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <button
               id="login_exit_button"
               type="button"
-              onClick={handleExit}
+              onClick={handleClear}
               className="w-full py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl transition text-xs cursor-pointer border border-slate-200 dark:border-slate-700"
             >
               مسح البيانات

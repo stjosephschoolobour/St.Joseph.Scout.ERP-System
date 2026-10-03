@@ -331,3 +331,24 @@ html.dark ::-webkit-scrollbar-thumb:hover {
     color: #000000 !important;
   }
 }
+
+/* ------------------------------------------------------------
+   10. Browser Autofill Prevention & Neutralization
+   Ensures browser password managers do not dye input fields blue
+   ------------------------------------------------------------ */
+input.no-autofill:-webkit-autofill,
+input.no-autofill:-webkit-autofill:hover, 
+input.no-autofill:-webkit-autofill:focus, 
+input.no-autofill:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #f8fafc inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+html.dark input.no-autofill:-webkit-autofill,
+html.dark input.no-autofill:-webkit-autofill:hover, 
+html.dark input.no-autofill:-webkit-autofill:focus, 
+html.dark input.no-autofill:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
